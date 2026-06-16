@@ -820,11 +820,6 @@ class _ChatView extends StatelessWidget {
                   ],
                 ),
               ),
-              IconButton(
-                tooltip: 'Обновить',
-                onPressed: () {},
-                icon: const Icon(Icons.sync),
-              ),
             ],
           ),
         ),
