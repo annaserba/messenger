@@ -5,7 +5,7 @@ class Message {
     required this.text,
     required this.sentAt,
     required this.isMine,
-    this.reaction,
+    this.reactions = const [],
   });
 
   factory Message.fromJson(Map<String, dynamic> json, String currentUser) {
@@ -17,8 +17,32 @@ class Message {
       sentAt:
           DateTime.tryParse(json['sentAt'] as String? ?? '') ?? DateTime.now(),
       isMine: author == currentUser,
-      reaction: json['reaction'] as String?,
+      reactions: _parseReactions(json['reactions'] as List<dynamic>?, currentUser),
     );
+  }
+
+  static List<MessageReaction> _parseReactions(List<dynamic>? raw, String currentUser) {
+    if (raw == null || raw.isEmpty) return [];
+    final counts = <String, int>{};
+    final userEmojis = <String, String>{};
+    for (final r in raw) {
+      if (r is Map<String, dynamic>) {
+        final emoji = r['emoji'] as String? ?? '';
+        final uid = r['userId'] as String? ?? '';
+        if (emoji.isNotEmpty) {
+          counts[emoji] = (counts[emoji] ?? 0) + 1;
+          if (uid == currentUser) userEmojis[emoji] = emoji;
+        }
+      }
+    }
+    return counts.entries.map((e) {
+      return MessageReaction(
+        emoji: e.key,
+        count: e.value,
+        mine: userEmojis.containsKey(e.key),
+        userId: userEmojis[e.key] ?? '',
+      );
+    }).toList();
   }
 
   final String id;
@@ -26,5 +50,21 @@ class Message {
   final String text;
   final DateTime sentAt;
   final bool isMine;
-  String? reaction;
+  final List<MessageReaction> reactions;
+
+  bool get hasReactions => reactions.isNotEmpty;
+}
+
+class MessageReaction {
+  const MessageReaction({
+    required this.emoji,
+    required this.count,
+    required this.mine,
+    required this.userId,
+  });
+
+  final String emoji;
+  final int count;
+  final bool mine;
+  final String userId;
 }

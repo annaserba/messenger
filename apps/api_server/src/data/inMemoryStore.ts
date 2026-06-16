@@ -1,4 +1,4 @@
-import { createMessage, makeParticipant, type Chat, type ChatType, type Message } from '../domain/message.ts';
+import { createMessage, makeParticipant, toggleReaction, type Chat, type ChatType, type Message } from '../domain/message.ts';
 
 export type PublicChat = {
   id: string;
@@ -17,7 +17,7 @@ export type ChatStore = {
   findChat(chatId: string): Chat | undefined;
   findChatByMessage(messageId: string): Chat | undefined;
   addMessage(chatId: string, author: string, text: string): Message | null;
-  setReaction(messageId: string, reaction: string): Message | null;
+  setReaction(messageId: string, userId: string, userName: string, reaction: string): Message | null;
   createChat(title: string, type: ChatType, createdBy: string, creatorName: string): Chat;
   joinChat(chatId: string, userId: string, name: string): Chat | null;
   ensureUserChats(userId: string, name: string): void;
@@ -94,11 +94,11 @@ export function createInMemoryStore(): ChatStore {
       return message;
     },
 
-    setReaction(messageId: string, reaction: string) {
+    setReaction(messageId: string, userId: string, userName: string, reaction: string) {
       for (const chat of chats.values()) {
         const target = chat.messages.find((m) => m.id === messageId);
         if (target) {
-          target.reaction = target.reaction === reaction ? null : reaction;
+          toggleReaction(target, userId, userName, reaction);
           return target;
         }
       }

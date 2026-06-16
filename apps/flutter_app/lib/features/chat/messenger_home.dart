@@ -245,11 +245,42 @@ class _MessengerHomeState extends State<MessengerHome> {
     try {
       await _api.setReaction(messageId: message.id, reaction: reaction);
       await _loadChats();
-    } catch (_) {
-      setState(() {
-        message.reaction = message.reaction == reaction ? null : reaction;
-      });
-    }
+    } catch (_) {}
+  }
+
+  void _showReactionPicker(Message message) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                for (final emoji in const ['👍', '❤️', '😂', '😮', '😢', '🙏', '👏', '🔥', '🎉', '💯'])
+                  InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _reactTo(message, emoji);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Theme.of(ctx).colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(emoji, style: const TextStyle(fontSize: 24)),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _logout() async {
@@ -382,7 +413,7 @@ class _MessengerHomeState extends State<MessengerHome> {
                                   messageFocus: _messageFocus,
                                   onMessageChanged: _toggleTyping,
                                   onSend: _sendMessage,
-                                  onReact: _reactTo,
+                                  onLongPress: _showReactionPicker,
                                 ),
                         ),
                       ],
@@ -412,7 +443,7 @@ class _MessengerHomeState extends State<MessengerHome> {
                                   messageFocus: _messageFocus,
                                   onMessageChanged: _toggleTyping,
                                   onSend: _sendMessage,
-                                  onReact: _reactTo,
+                                  onLongPress: _showReactionPicker,
                                 ),
                         ),
                       ],
@@ -696,7 +727,7 @@ class _ChatView extends StatelessWidget {
     required this.messageFocus,
     required this.onMessageChanged,
     required this.onSend,
-    required this.onReact,
+    required this.onLongPress,
   });
 
   final Chat chat;
@@ -705,7 +736,7 @@ class _ChatView extends StatelessWidget {
   final FocusNode messageFocus;
   final ValueChanged<String> onMessageChanged;
   final VoidCallback onSend;
-  final void Function(Message message, String reaction) onReact;
+  final void Function(Message message) onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -773,7 +804,7 @@ class _ChatView extends StatelessWidget {
               final message = chat.messages[chat.messages.length - 1 - index];
               return _MessageBubble(
                 message: message,
-                onReact: (reaction) => onReact(message, reaction),
+                onLongPress: () => onLongPress(message),
               );
             },
           ),
@@ -792,11 +823,11 @@ class _ChatView extends StatelessWidget {
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.message,
-    required this.onReact,
+    required this.onLongPress,
   });
 
   final Message message;
-  final ValueChanged<String> onReact;
+  final VoidCallback onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -811,87 +842,88 @@ class _MessageBubble extends StatelessWidget {
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),
         child: Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: Column(
-            crossAxisAlignment: message.isMine
-                ? CrossAxisAlignment.end
-                : CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: bubbleColor,
-                  borderRadius: BorderRadius.only(
-                    topLeft: const Radius.circular(8),
-                    topRight: const Radius.circular(8),
-                    bottomLeft: Radius.circular(message.isMine ? 8 : 2),
-                    bottomRight: Radius.circular(message.isMine ? 2 : 8),
+          padding: const EdgeInsets.only(bottom: 6),
+          child: GestureDetector(
+            onLongPress: onLongPress,
+            child: Column(
+              crossAxisAlignment: message.isMine
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: bubbleColor,
+                    borderRadius: BorderRadius.only(
+                      topLeft: const Radius.circular(8),
+                      topRight: const Radius.circular(8),
+                      bottomLeft: Radius.circular(message.isMine ? 8 : 2),
+                      bottomRight: Radius.circular(message.isMine ? 2 : 8),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.06),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.06),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (!message.isMine)
-                      Text(
-                        message.author,
-                        style: TextStyle(
-                          color: textColor.withOpacity(0.72),
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                        ),
-                      ),
-                    if (!message.isMine) const SizedBox(height: 4),
-                    Text(
-                      message.text,
-                      style: TextStyle(color: textColor, fontSize: 15),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _timeLabel(message.sentAt),
-                      style: TextStyle(
-                        color: textColor.withOpacity(0.7),
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 4),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final reaction in const ['👍', '❤️', '😂'])
-                    Padding(
-                      padding: const EdgeInsets.only(left: 4),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(16),
-                        onTap: () => onReact(reaction),
-                        child: Container(
-                          width: 34,
-                          height: 28,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: message.reaction == reaction
-                                ? colors.secondaryContainer
-                                : colors.surface,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: colors.outlineVariant),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (!message.isMine)
+                        Text(
+                          message.author,
+                          style: TextStyle(
+                            color: textColor.withOpacity(0.72),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
                           ),
-                          child: Text(reaction),
                         ),
+                      if (!message.isMine) const SizedBox(height: 4),
+                      Text(
+                        message.text,
+                        style: TextStyle(color: textColor, fontSize: 15),
                       ),
-                    ),
-                ],
-              ),
-            ],
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _timeLabel(message.sentAt),
+                            style: TextStyle(
+                              color: textColor.withOpacity(0.7),
+                              fontSize: 11,
+                            ),
+                          ),
+                          if (message.hasReactions) ...[
+                            const SizedBox(width: 8),
+                            ...message.reactions.map((r) => Padding(
+                                  padding: const EdgeInsets.only(left: 4),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: r.mine
+                                          ? colors.primaryContainer
+                                          : colors.surfaceContainerHighest,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      '${r.emoji} ${r.count}',
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                )),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

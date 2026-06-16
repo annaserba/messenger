@@ -107,7 +107,7 @@ export async function handleChatRoutes({
   if (req.method === 'POST' && reactionMatch) {
     const body = await readJson(req);
     const reaction = String(body.reaction ?? '').trim();
-    const target = store.setReaction(reactionMatch[1] ?? '', reaction);
+    const target = store.setReaction(reactionMatch[1] ?? '', userId, userName, reaction);
 
     if (!target) {
       sendJson(res, 404, { error: 'message_not_found' });

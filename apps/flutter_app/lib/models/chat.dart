@@ -67,7 +67,9 @@ class Chat {
                 'author': message.author,
                 'text': message.text,
                 'sentAt': message.sentAt.toIso8601String(),
-                'reaction': message.reaction,
+                'reactions': message.reactions
+                    .map((r) => {'userId': r.userId, 'emoji': r.emoji, 'name': ''})
+                    .toList(),
               })
           .toList(),
     };
