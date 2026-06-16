@@ -15,12 +15,19 @@ export type Reaction = {
   emoji: string;
 };
 
+export type ReplyInfo = {
+  id: string;
+  author: string;
+  text: string;
+};
+
 export type Message = {
   id: string;
   author: string;
   text: string;
   sentAt: string;
   reactions: Reaction[];
+  replyTo?: ReplyInfo;
 };
 
 export type Chat = {
@@ -39,6 +46,7 @@ export function createMessage(
   author: string,
   text: string,
   sentAt: number,
+  replyTo?: ReplyInfo,
 ): Message {
   return {
     id: randomUUID(),
@@ -46,6 +54,7 @@ export function createMessage(
     text,
     sentAt: new Date(sentAt).toISOString(),
     reactions: [],
+    ...(replyTo ? { replyTo } : {}),
   };
 }
 

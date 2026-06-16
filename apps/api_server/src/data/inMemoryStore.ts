@@ -1,4 +1,4 @@
-import { createMessage, makeParticipant, toggleReaction, type Chat, type ChatType, type Message } from '../domain/message.ts';
+import { createMessage, makeParticipant, toggleReaction, type Chat, type ChatType, type Message, type ReplyInfo } from '../domain/message.ts';
 
 export type PublicChat = {
   id: string;
@@ -16,7 +16,8 @@ export type ChatStore = {
   listChats(userId: string): PublicChat[];
   findChat(chatId: string): Chat | undefined;
   findChatByMessage(messageId: string): Chat | undefined;
-  addMessage(chatId: string, author: string, text: string): Message | null;
+  findMessage(messageId: string): { chat: Chat; message: Message } | undefined;
+  addMessage(chatId: string, author: string, text: string, replyToId?: string): Message | null;
   setReaction(messageId: string, userId: string, userName: string, reaction: string): Message | null;
   createChat(title: string, type: ChatType, createdBy: string, creatorName: string): Chat;
   joinChat(chatId: string, userId: string, name: string): Chat | null;
@@ -86,10 +87,25 @@ export function createInMemoryStore(): ChatStore {
       return undefined;
     },
 
-    addMessage(chatId: string, author: string, text: string) {
+    findMessage(messageId: string) {
+      for (const chat of chats.values()) {
+        const msg = chat.messages.find((m) => m.id === messageId);
+        if (msg) return { chat, message: msg };
+      }
+      return undefined;
+    },
+
+    addMessage(chatId: string, author: string, text: string, replyToId?: string) {
       const chat = chats.get(chatId);
       if (!chat) return null;
-      const message = createMessage(author, text, Date.now());
+      let replyTo: ReplyInfo | undefined;
+      if (replyToId) {
+        const found = this.findMessage(replyToId);
+        if (found) {
+          replyTo = { id: replyToId, author: found.message.author, text: found.message.text };
+        }
+      }
+      const message = createMessage(author, text, Date.now(), replyTo);
       chat.messages.push(message);
       return message;
     },

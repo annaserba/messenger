@@ -8,6 +8,7 @@ import '../../core/ws/ws_client.dart';
 import '../../models/chat.dart';
 import '../../models/message.dart';
 import '../../models/user.dart';
+import 'push_service.dart' if (dart.library.html) 'push_service_web.dart';
 import '../auth/auth_redirect.dart';
 import '../auth/login_screen.dart';
 
@@ -25,6 +26,7 @@ class _MessengerHomeState extends State<MessengerHome> {
 
   List<Chat> _chats = [];
   User? _user;
+  Message? _replyTo;
   int _selectedChatIndex = 0;
   bool _isTyping = false;
   bool _isSignedIn = false;
@@ -84,6 +86,7 @@ class _MessengerHomeState extends State<MessengerHome> {
 
       await _loadChats();
       _connectWs();
+      _subscribeToPush(token);
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -116,6 +119,7 @@ class _MessengerHomeState extends State<MessengerHome> {
 
       await _loadChats();
       _connectWs();
+      _subscribeToPush(token);
     } catch (_) {
       await clearSession();
       if (!mounted) return;
@@ -161,6 +165,7 @@ class _MessengerHomeState extends State<MessengerHome> {
 
       await _loadChats();
       _connectWs();
+      _subscribeToPush(token ?? '');
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -214,15 +219,17 @@ class _MessengerHomeState extends State<MessengerHome> {
   Future<void> _sendMessage() async {
     final chat = _selectedChat;
     final text = _messageController.text.trim();
+    final replyTo = _replyTo;
     if (chat == null || text.isEmpty) return;
 
     _messageController.clear();
     setState(() {
       _isTyping = false;
+      _replyTo = null;
     });
 
     try {
-      await _api.sendMessage(chatId: chat.id, text: text);
+      await _api.sendMessage(chatId: chat.id, text: text, replyTo: replyTo?.id);
       await _loadChats();
     } catch (_) {
       if (!mounted) return;
@@ -246,6 +253,19 @@ class _MessengerHomeState extends State<MessengerHome> {
       await _api.setReaction(messageId: message.id, reaction: reaction);
       await _loadChats();
     } catch (_) {}
+  }
+
+  void _startReply(Message message) {
+    setState(() => _replyTo = message);
+    _messageFocus.requestFocus();
+  }
+
+  void _cancelReply() {
+    setState(() => _replyTo = null);
+  }
+
+  Future<void> _subscribeToPush(String token) async {
+    await subscribeToPush(_api.baseUrl, token);
   }
 
   void _showReactionPicker(Message message) {

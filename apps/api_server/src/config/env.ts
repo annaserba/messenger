@@ -8,6 +8,11 @@ export type AppConfig = {
     clientSecret?: string;
     redirectUri: string;
   };
+  vapid: {
+    publicKey: string;
+    privateKey: string;
+  };
+  email: string;
 };
 
 export const config: AppConfig = {
@@ -20,4 +25,9 @@ export const config: AppConfig = {
       process.env.YANDEX_REDIRECT_URI ??
       `http://127.0.0.1:${port}/api/auth/yandex/callback`,
   },
+  vapid: {
+    publicKey: process.env.VAPID_PUBLIC ?? 'BIYlwyN9j3dkuxT7MgHrCbF9uEJmRYzpJ2AOvHzVTf4poXUK45IqHz3vWIxkOTKqd0Zmc1yGEaxCbj5DjTCicNs',
+    privateKey: process.env.VAPID_PRIVATE ?? 'CF2zqmYuJfx4spFwtTlRdnHqT5uEOnQjclj7dB7vRiA',
+  },
+  email: process.env.VAPID_EMAIL ?? 'mailto:push@messenger.local',
 };

@@ -44,11 +44,12 @@ class ApiClient {
   Future<Map<String, dynamic>> sendMessage({
     required String chatId,
     required String text,
+    String? replyTo,
   }) {
     return _request(
       'POST',
       '/api/chats/$chatId/messages',
-      body: {'text': text},
+      body: {'text': text, if (replyTo != null) 'replyTo': replyTo},
     );
   }
 

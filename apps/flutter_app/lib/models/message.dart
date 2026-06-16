@@ -1,3 +1,19 @@
+class ReplyInfo {
+  const ReplyInfo({required this.id, required this.author, required this.text});
+
+  factory ReplyInfo.fromJson(Map<String, dynamic> json) {
+    return ReplyInfo(
+      id: json['id'] as String,
+      author: json['author'] as String? ?? '',
+      text: json['text'] as String? ?? '',
+    );
+  }
+
+  final String id;
+  final String author;
+  final String text;
+}
+
 class Message {
   Message({
     required this.id,
@@ -6,6 +22,7 @@ class Message {
     required this.sentAt,
     required this.isMine,
     this.reactions = const [],
+    this.replyTo,
   });
 
   factory Message.fromJson(Map<String, dynamic> json, String currentUser) {
@@ -18,6 +35,9 @@ class Message {
           DateTime.tryParse(json['sentAt'] as String? ?? '') ?? DateTime.now(),
       isMine: author == currentUser,
       reactions: _parseReactions(json['reactions'] as List<dynamic>?, currentUser),
+      replyTo: json['replyTo'] != null
+          ? ReplyInfo.fromJson(json['replyTo'] as Map<String, dynamic>)
+          : null,
     );
   }
 
@@ -51,6 +71,7 @@ class Message {
   final DateTime sentAt;
   final bool isMine;
   final List<MessageReaction> reactions;
+  final ReplyInfo? replyTo;
 
   bool get hasReactions => reactions.isNotEmpty;
 }
