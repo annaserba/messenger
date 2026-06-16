@@ -1,0 +1,6 @@
+.env
+.env.*
+!.env.example
+apps/api_server/.env
+apps/api_server/.env.*
+!apps/api_server/.env.example
