@@ -3,6 +3,10 @@ import { randomUUID } from 'node:crypto';
 export type AuthUser = {
   id: string;
   name: string;
+  email?: string;
+  avatarUrl?: string;
+  firstName?: string;
+  lastName?: string;
   provider: 'yandex' | 'yandex-demo';
 };
 

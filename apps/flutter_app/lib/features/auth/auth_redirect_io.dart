@@ -1,11 +1,7 @@
 class AuthRedirectResult {
-  const AuthRedirectResult({
-    required this.accessToken,
-    required this.name,
-  });
+  const AuthRedirectResult({required this.accessToken});
 
   final String accessToken;
-  final String name;
 }
 
 AuthRedirectResult? readAuthRedirect() => null;

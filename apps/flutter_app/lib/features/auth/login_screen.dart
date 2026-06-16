@@ -101,7 +101,7 @@ class _AppLogoPainter extends CustomPainter {
     final bubble = Paint()..color = Colors.white;
     final line = Paint()..color = const Color(0xFF2563EB);
     final dot = Paint()..color = const Color(0xFF22C55E);
-    final dotInner = Paint()..color = Colors.white.withValues(alpha: 0.9);
+    final dotInner = Paint()..color = Colors.white.withOpacity(0.9);
 
     canvas.drawRRect(RRect.fromRectAndRadius(rect, radius), background);
     canvas.drawRRect(

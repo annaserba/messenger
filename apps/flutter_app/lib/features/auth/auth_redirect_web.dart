@@ -3,13 +3,9 @@
 import 'dart:html' as html;
 
 class AuthRedirectResult {
-  const AuthRedirectResult({
-    required this.accessToken,
-    required this.name,
-  });
+  const AuthRedirectResult({required this.accessToken});
 
   final String accessToken;
-  final String name;
 }
 
 AuthRedirectResult? readAuthRedirect() {
@@ -17,11 +13,10 @@ AuthRedirectResult? readAuthRedirect() {
   if (uri.queryParameters['auth'] != 'yandex') return null;
 
   final token = uri.queryParameters['token'];
-  final name = uri.queryParameters['name'];
-  if (token == null || name == null) return null;
+  if (token == null || token.isEmpty) return null;
 
   html.window.history.replaceState(null, 'Messenger MVP', uri.path);
-  return AuthRedirectResult(accessToken: token, name: name);
+  return AuthRedirectResult(accessToken: token);
 }
 
 void openAuthUrl(String url) {

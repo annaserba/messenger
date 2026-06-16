@@ -22,6 +22,10 @@ class ApiClient {
     return _request('POST', '/api/auth/yandex/demo');
   }
 
+  Future<Map<String, dynamic>> fetchMe() {
+    return _request('GET', '/api/auth/me');
+  }
+
   Future<Map<String, dynamic>> fetchChats() {
     return _request('GET', '/api/chats');
   }

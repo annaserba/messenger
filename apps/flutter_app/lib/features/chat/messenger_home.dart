@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/storage/session_storage.dart';
 import '../../models/chat.dart';
 import '../../models/message.dart';
+import '../../models/user.dart';
 import '../auth/auth_redirect.dart';
 import '../auth/login_screen.dart';
 
@@ -17,12 +19,13 @@ class MessengerHome extends StatefulWidget {
 
 class _MessengerHomeState extends State<MessengerHome> {
   final _api = ApiClient();
-  final _nameController = TextEditingController(text: 'Анна');
+  final _nameController = TextEditingController();
   final _messageController = TextEditingController();
   final _messageFocus = FocusNode();
 
   List<Chat> _chats = [];
-  String _userName = 'Анна';
+  User? _user;
+  String _userName = '';
   int _selectedChatIndex = 0;
   bool _isTyping = false;
   bool _isSignedIn = false;
@@ -53,18 +56,83 @@ class _MessengerHomeState extends State<MessengerHome> {
 
   Future<void> _consumeAuthRedirect() async {
     final redirect = readAuthRedirect();
-    if (redirect == null) return;
+    if (redirect != null) {
+      await _onTokenReceived(redirect.accessToken);
+      return;
+    }
 
-    setState(() {
-      _userName = redirect.name;
-      _api.accessToken = redirect.accessToken;
-      _nameController.text = redirect.name;
-      _isSignedIn = true;
-      _error = null;
+    await _tryRestoreSession();
+  }
+
+  Future<void> _onTokenReceived(String token) async {
+    _api.accessToken = token;
+
+    try {
+      final response = await _api.fetchMe();
+      final userJson = response['user'] as Map<String, dynamic>;
+      final user = User.fromJson(userJson);
+
+      await _saveSession(token, userJson);
+
+      if (!mounted) return;
+      setState(() {
+        _user = user;
+        _userName = user.firstName ?? user.name;
+        _nameController.text = _userName;
+        _isSignedIn = true;
+        _error = null;
+      });
+
+      await _loadChats();
+      _startPolling();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Не удалось загрузить профиль. Попробуйте войти снова.';
+        _api.accessToken = null;
+      });
+    }
+  }
+
+  Future<void> _tryRestoreSession() async {
+    final stored = await loadSession();
+    if (stored == null) return;
+
+    final token = stored['accessToken'] as String?;
+    if (token == null || token.isEmpty) return;
+
+    _api.accessToken = token;
+
+    try {
+      final response = await _api.fetchMe();
+      final userJson = response['user'] as Map<String, dynamic>;
+      final user = User.fromJson(userJson);
+
+      if (!mounted) return;
+      setState(() {
+        _user = user;
+        _userName = user.firstName ?? user.name;
+        _nameController.text = _userName;
+        _isSignedIn = true;
+        _error = null;
+      });
+
+      await _loadChats();
+      _startPolling();
+    } catch (_) {
+      await clearSession();
+      if (!mounted) return;
+      setState(() {
+        _api.accessToken = null;
+      });
+    }
+  }
+
+  Future<void> _saveSession(String token, Map<String, dynamic> user) async {
+    await saveSession({
+      'accessToken': token,
+      'user': user,
     });
-
-    await _loadChats();
-    _startPolling();
   }
 
   Future<void> _signInWithYandex() async {
@@ -81,24 +149,26 @@ class _MessengerHomeState extends State<MessengerHome> {
       }
 
       final response = await _api.signInWithYandexDemo();
-      final user = response['user'] as Map<String, dynamic>;
-      final name = user['name'] as String? ?? 'Пользователь';
+      final userJson = response['user'] as Map<String, dynamic>;
+      final user = User.fromJson(userJson);
+      final token = response['accessToken'] as String?;
 
+      _api.accessToken = token;
+      await _saveSession(token ?? '', userJson);
+
+      if (!mounted) return;
       setState(() {
-        _userName = name;
-        _api.accessToken = response['accessToken'] as String?;
-        _nameController.text = name;
+        _user = user;
+        _userName = user.firstName ?? user.name;
+        _nameController.text = _userName;
         _isSignedIn = true;
+        _error = 'Яндекс OAuth не настроен, включён демо-вход.';
       });
 
       await _loadChats();
       _startPolling();
-      if (mounted) {
-        setState(() {
-          _error = 'Яндекс OAuth не настроен, включён демо-вход.';
-        });
-      }
     } catch (_) {
+      if (!mounted) return;
       setState(() {
         _error = 'Не удалось войти через Яндекс. Проверьте backend.';
       });
@@ -132,9 +202,7 @@ class _MessengerHomeState extends State<MessengerHome> {
       if (!_isSignedIn) return;
       try {
         await _loadChats();
-      } catch (_) {
-        // Keep the current chat state visible if a poll fails.
-      }
+      } catch (_) {}
     });
   }
 
@@ -184,7 +252,6 @@ class _MessengerHomeState extends State<MessengerHome> {
   void _toggleTyping(String value) {
     final hasText = value.trim().isNotEmpty;
     if (hasText == _isTyping) return;
-
     setState(() {
       _isTyping = hasText;
     });
@@ -199,6 +266,21 @@ class _MessengerHomeState extends State<MessengerHome> {
         message.reaction = message.reaction == reaction ? null : reaction;
       });
     }
+  }
+
+  Future<void> _logout() async {
+    await clearSession();
+    _pollingTimer?.cancel();
+    if (!mounted) return;
+    setState(() {
+      _api.accessToken = null;
+      _user = null;
+      _userName = '';
+      _nameController.clear();
+      _isSignedIn = false;
+      _chats = [];
+      _error = null;
+    });
   }
 
   @override
@@ -237,10 +319,12 @@ class _MessengerHomeState extends State<MessengerHome> {
                           child: _Sidebar(
                             chats: _chats,
                             selectedIndex: _selectedChatIndex,
+                            user: _user,
                             userName: _userName,
                             nameController: _nameController,
                             onNameSaved: _saveName,
                             onChatSelected: _selectChat,
+                            onLogout: _logout,
                           ),
                         ),
                         const VerticalDivider(width: 1),
@@ -266,10 +350,12 @@ class _MessengerHomeState extends State<MessengerHome> {
                           child: _Sidebar(
                             chats: _chats,
                             selectedIndex: _selectedChatIndex,
+                            user: _user,
                             userName: _userName,
                             nameController: _nameController,
                             onNameSaved: _saveName,
                             onChatSelected: _selectChat,
+                            onLogout: _logout,
                             compact: true,
                           ),
                         ),
@@ -310,25 +396,31 @@ class _Sidebar extends StatelessWidget {
   const _Sidebar({
     required this.chats,
     required this.selectedIndex,
+    required this.user,
     required this.userName,
     required this.nameController,
     required this.onNameSaved,
     required this.onChatSelected,
+    required this.onLogout,
     this.compact = false,
   });
 
   final List<Chat> chats;
   final int selectedIndex;
+  final User? user;
   final String userName;
   final TextEditingController nameController;
   final VoidCallback onNameSaved;
   final ValueChanged<int> onChatSelected;
+  final VoidCallback onLogout;
   final bool compact;
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
     return Material(
-      color: Theme.of(context).colorScheme.surface,
+      color: colors.surface,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -336,21 +428,37 @@ class _Sidebar extends StatelessWidget {
           children: [
             Row(
               children: [
-                CircleAvatar(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                  child: Text(_initials(userName)),
+                _UserAvatar(
+                  avatarUrl: user?.avatarUrl,
+                  name: userName,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: TextField(
-                    controller: nameController,
-                    onSubmitted: (_) => onNameSaved(),
-                    decoration: const InputDecoration(
-                      labelText: 'Ваше имя',
-                      isDense: true,
-                      border: OutlineInputBorder(),
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        controller: nameController,
+                        onSubmitted: (_) => onNameSaved(),
+                        decoration: const InputDecoration(
+                          labelText: 'Ваше имя',
+                          isDense: true,
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      if (user?.email != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          user!.email!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelSmall
+                              ?.copyWith(color: colors.onSurfaceVariant),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -359,14 +467,21 @@ class _Sidebar extends StatelessWidget {
                   onPressed: onNameSaved,
                   icon: const Icon(Icons.check),
                 ),
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: 'Выйти',
+                  onPressed: onLogout,
+                  icon: Icon(Icons.logout, color: colors.error),
+                ),
               ],
             ),
             const SizedBox(height: 16),
             Text(
               'Чаты',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
             Expanded(
@@ -394,6 +509,34 @@ class _Sidebar extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _UserAvatar extends StatelessWidget {
+  const _UserAvatar({this.avatarUrl, required this.name});
+
+  final String? avatarUrl;
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    if (avatarUrl != null && avatarUrl!.isNotEmpty) {
+      return CircleAvatar(
+        radius: 20,
+        backgroundColor: colors.surfaceContainerHighest,
+        backgroundImage: NetworkImage(avatarUrl!),
+        onBackgroundImageError: (_, __) {},
+        child: Text(_initials(name)),
+      );
+    }
+
+    return CircleAvatar(
+      backgroundColor: colors.primary,
+      foregroundColor: colors.onPrimary,
+      child: Text(_initials(name)),
     );
   }
 }
@@ -530,9 +673,10 @@ class _ChatView extends StatelessWidget {
                       chat.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w800),
                     ),
                     Text(
                       isTyping ? 'вы печатаете...' : chat.subtitle,
@@ -589,7 +733,8 @@ class _MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final alignment = message.isMine ? Alignment.centerRight : Alignment.centerLeft;
+    final alignment =
+        message.isMine ? Alignment.centerRight : Alignment.centerLeft;
     final bubbleColor = message.isMine ? colors.primary : colors.surface;
     final textColor = message.isMine ? colors.onPrimary : colors.onSurface;
 
@@ -600,11 +745,13 @@ class _MessageBubble extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.only(bottom: 10),
           child: Column(
-            crossAxisAlignment:
-                message.isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            crossAxisAlignment: message.isMine
+                ? CrossAxisAlignment.end
+                : CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
                   color: bubbleColor,
                   borderRadius: BorderRadius.only(
@@ -615,7 +762,7 @@ class _MessageBubble extends StatelessWidget {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.06),
+                      color: Colors.black.withOpacity(0.06),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -628,7 +775,7 @@ class _MessageBubble extends StatelessWidget {
                       Text(
                         message.author,
                         style: TextStyle(
-                          color: textColor.withValues(alpha: 0.72),
+                          color: textColor.withOpacity(0.72),
                           fontWeight: FontWeight.w700,
                           fontSize: 12,
                         ),
@@ -642,7 +789,7 @@ class _MessageBubble extends StatelessWidget {
                     Text(
                       _timeLabel(message.sentAt),
                       style: TextStyle(
-                        color: textColor.withValues(alpha: 0.7),
+                        color: textColor.withOpacity(0.7),
                         fontSize: 11,
                       ),
                     ),
