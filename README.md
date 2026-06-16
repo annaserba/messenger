@@ -1,28 +1,20 @@
-# AI-native Messenger
+# Messenger MVP
 
-Архитектурный репозиторий для приватного AI-native мессенджера для обычных пользователей.
+Приватный AI-native мессенджер. Flutter (iOS/Android/Web) + TypeScript backend.
 
-Основной документ:
+[Архитектура](./docs/ai-native-messenger-architecture.ru.md) ·
+[Вопросы к собеседованию](./docs/interview-questions.ru.md)
 
-- [Архитектура AI-native мессенджера](./docs/ai-native-messenger-architecture.ru.md)
-- [Что могут спросить на собеседовании](./docs/interview-questions.ru.md)
+## Быстрый старт
 
-Проект строится вокруг Flutter-клиентов, NestJS real-time backend, NATS JetStream,
-PostgreSQL, Redis, Qdrant, S3-совместимого хранилища, локального AI на устройстве и
-self-hosted AI-сервисов. Облачный AI допускается только с явного согласия пользователя.
-
-## Текущая базовая версия
-
-Минимальное Flutter-приложение находится в `apps/flutter_app`.
-
-Запуск TypeScript backend:
+Backend:
 
 ```bash
 cd apps/api_server
 npm run dev
 ```
 
-Запуск web-версии в другом терминале:
+Flutter web (в другом терминале):
 
 ```bash
 cd apps/flutter_app
@@ -30,42 +22,49 @@ flutter pub get
 flutter run -d web-server --web-hostname 127.0.0.1 --web-port 8080
 ```
 
-После запуска откройте `http://127.0.0.1:8080`.
+Открыть `http://127.0.0.1:8080`. API на `http://127.0.0.1:3000`.
 
-Backend API будет доступен на `http://127.0.0.1:3000`.
+Без переменных окружения работает демо-вход — MVP запускается сразу.
 
-Для настоящего Яндекс OAuth нужно зарегистрировать приложение в Яндекс OAuth и передать backend:
+## Яндекс OAuth
 
-- `YANDEX_CLIENT_ID`
-- `YANDEX_CLIENT_SECRET`
-- `YANDEX_REDIRECT_URI`
-- `FRONTEND_URL`
+Для реального входа через Яндекс:
 
-Без этих переменных работает демо-вход через Яндекс, чтобы MVP запускался сразу.
+```bash
+export YANDEX_CLIENT_ID=...
+export YANDEX_CLIENT_SECRET=...
+export YANDEX_REDIRECT_URI=http://127.0.0.1:3000/api/auth/yandex/callback
+export FRONTEND_URL=http://127.0.0.1:8080
+```
 
-### Профиль из Яндекс ID
+Профиль заполняется из Яндекс-аккаунта: имя, фамилия, email, аватар. Сессия сохраняется
+в localStorage (web) / файл (native) и восстанавливается при перезагрузке.
 
-При входе через Яндекс (или демо) профиль пользователя заполняется данными из Яндекс-аккаунта:
-имя, фамилия, email и аватар. Эти данные отображаются в сайдбаре и сохраняются в
-localStorage (web) / файл (native) — сессия восстанавливается при перезагрузке приложения.
+## Зеркало Flutter
 
-### Зеркало Flutter
-
-Если Google Cloud Storage недоступен, используйте зеркало:
+Если Google Cloud Storage недоступен:
 
 ```bash
 export FLUTTER_STORAGE_BASE_URL="https://storage.flutter-io.cn"
 flutter precache
-flutter run -d web-server --web-hostname 127.0.0.1 --web-port 8080
 ```
 
-Backend уже разложен под рост:
+## Структура
 
-- `src/config` — конфигурация окружения.
-- `src/domain` — доменные типы и фабрики.
-- `src/data` — временные in-memory хранилища, которые позже заменяются PostgreSQL/Redis.
-- `src/http` — общие HTTP helpers.
-- `src/routes` — route handlers по функциональным зонам.
-- `src/server.ts` — точка входа.
-
-Сейчас TypeScript запускается напрямую через Node 25 без отдельной сборки. Позже можно заменить этот режим на NestJS или обычную сборку `tsc` без изменения публичных API-контрактов.
+```
+apps/
+├── api_server/     # TypeScript backend (Node 25, без фреймворка)
+│   └── src/
+│       ├── config/      # env-конфигурация
+│       ├── domain/      # доменные типы
+│       ├── data/        # in-memory хранилища (→ PostgreSQL/Redis)
+│       ├── http/        # JSON/CORS helpers
+│       └── routes/      # auth, chat endpoints
+└── flutter_app/    # Flutter-клиент (нулевые внешние зависимости)
+    └── lib/
+        ├── core/api/         # HTTP-клиент
+        ├── core/storage/     # персистентность сессии
+        ├── features/auth/    # вход через Яндекс
+        ├── features/chat/    # чаты, сообщения, реакции
+        └── models/           # User, Chat, Message
+```
