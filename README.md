@@ -79,3 +79,56 @@ apps/
         ├── features/chat/    # чаты, сообщения, реакции
         └── models/           # User, Chat, Message
 ```
+
+## Схема БД (целевая)
+
+```sql
+CREATE TABLE users (
+  id          UUID PRIMARY KEY,
+  yandex_id   TEXT UNIQUE NOT NULL,
+  name        TEXT NOT NULL,
+  email       TEXT,
+  avatar_url  TEXT,
+  first_name  TEXT,
+  last_name   TEXT,
+  created_at  TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE chats (
+  id          UUID PRIMARY KEY,
+  title       TEXT NOT NULL,
+  type        TEXT NOT NULL CHECK (type IN ('personal','group','channel')),
+  created_by  UUID REFERENCES users(id),
+  created_at  TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE chat_participants (
+  chat_id     UUID REFERENCES chats(id) ON DELETE CASCADE,
+  user_id     UUID REFERENCES users(id),
+  role        TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('admin','member')),
+  joined_at   TIMESTAMPTZ DEFAULT now(),
+  PRIMARY KEY (chat_id, user_id)
+);
+
+CREATE TABLE messages (
+  id          UUID PRIMARY KEY,
+  chat_id     UUID REFERENCES chats(id) ON DELETE CASCADE,
+  author_id   UUID REFERENCES users(id),
+  text        TEXT NOT NULL,
+  sent_at     TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX idx_messages_chat_time ON messages(chat_id, sent_at);
+
+CREATE TABLE reactions (
+  message_id  UUID REFERENCES messages(id) ON DELETE CASCADE,
+  user_id     UUID REFERENCES users(id),
+  emoji       TEXT NOT NULL,
+  PRIMARY KEY (message_id, user_id, emoji)
+);
+
+CREATE TABLE user_sessions (
+  token       TEXT PRIMARY KEY,
+  user_id     UUID REFERENCES users(id),
+  created_at  TIMESTAMPTZ DEFAULT now()
+);
+```
