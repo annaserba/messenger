@@ -412,6 +412,7 @@ class _MessengerHomeState extends State<MessengerHome> {
                               ? const _EmptyState()
                               : _ChatView(
                                   chat: selectedChat,
+                                  avatarUrl: _user?.avatarUrl,
                                   isTyping: _isTyping,
                                   messageController: _messageController,
                                   messageFocus: _messageFocus,
@@ -443,6 +444,7 @@ class _MessengerHomeState extends State<MessengerHome> {
                               ? const _EmptyState()
                               : _ChatView(
                                   chat: selectedChat,
+                                  avatarUrl: _user?.avatarUrl,
                                   isTyping: _isTyping,
                                   messageController: _messageController,
                                   messageFocus: _messageFocus,
@@ -489,6 +491,13 @@ class _Sidebar extends StatelessWidget {
   final VoidCallback onLogout;
   final VoidCallback onCreateChat;
   final bool compact;
+
+  String? _avatarForChat(Chat chat) {
+    if (!chat.isGroup && !chat.isChannel && chat.id == user?.id) {
+      return user?.avatarUrl;
+    }
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -581,6 +590,7 @@ class _Sidebar extends StatelessWidget {
                     child: _ChatTile(
                       chat: chat,
                       selected: selected,
+                      avatarUrl: _avatarForChat(chat),
                       onTap: () => onChatSelected(index),
                     ),
                   );
@@ -625,11 +635,13 @@ class _ChatTile extends StatelessWidget {
     required this.chat,
     required this.selected,
     required this.onTap,
+    this.avatarUrl,
   });
 
   final Chat chat;
   final bool selected;
   final VoidCallback onTap;
+  final String? avatarUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -660,11 +672,17 @@ class _ChatTile extends StatelessWidget {
                       : chat.isGroup
                           ? colors.secondary
                           : null,
-                  child: chat.isChannel
-                      ? const Icon(Icons.campaign, size: 18)
-                      : chat.isGroup
-                          ? const Icon(Icons.group, size: 18)
-                          : Text(chat.avatarLabel),
+                  backgroundImage: avatarUrl != null && avatarUrl!.isNotEmpty
+                      ? NetworkImage(avatarUrl!)
+                      : null,
+                  onBackgroundImageError: avatarUrl != null ? (_, __) {} : null,
+                  child: avatarUrl == null || avatarUrl!.isEmpty
+                      ? (chat.isChannel
+                          ? const Icon(Icons.campaign, size: 18)
+                          : chat.isGroup
+                              ? const Icon(Icons.group, size: 18)
+                              : Text(chat.avatarLabel))
+                      : null,
                 ),
                 if (chat.isOnline)
                   Positioned(
@@ -728,6 +746,7 @@ class _ChatTile extends StatelessWidget {
 class _ChatView extends StatelessWidget {
   const _ChatView({
     required this.chat,
+    this.avatarUrl,
     required this.isTyping,
     required this.messageController,
     required this.messageFocus,
@@ -738,6 +757,7 @@ class _ChatView extends StatelessWidget {
   });
 
   final Chat chat;
+  final String? avatarUrl;
   final bool isTyping;
   final TextEditingController messageController;
   final FocusNode messageFocus;
@@ -764,11 +784,17 @@ class _ChatView extends StatelessWidget {
                     : chat.isGroup
                         ? colors.secondary
                         : null,
-                child: chat.isChannel
-                    ? const Icon(Icons.campaign, size: 18)
-                    : chat.isGroup
-                        ? const Icon(Icons.group, size: 18)
-                        : Text(chat.avatarLabel),
+                backgroundImage: !chat.isGroup && !chat.isChannel && avatarUrl != null && avatarUrl!.isNotEmpty
+                    ? NetworkImage(avatarUrl!)
+                    : null,
+                onBackgroundImageError: avatarUrl != null ? (_, __) {} : null,
+                child: (chat.isGroup || chat.isChannel || avatarUrl == null || avatarUrl!.isEmpty)
+                    ? (chat.isChannel
+                        ? const Icon(Icons.campaign, size: 18)
+                        : chat.isGroup
+                            ? const Icon(Icons.group, size: 18)
+                            : Text(chat.avatarLabel))
+                    : null,
               ),
               const SizedBox(width: 12),
               Expanded(
