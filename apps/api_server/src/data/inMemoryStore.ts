@@ -18,6 +18,8 @@ export type ChatStore = {
   findChatByMessage(messageId: string): Chat | undefined;
   findMessage(messageId: string): { chat: Chat; message: Message } | undefined;
   addMessage(chatId: string, author: string, text: string, replyToId?: string): Message | null;
+  editMessage(messageId: string, text: string): Message | null;
+  deleteMessage(messageId: string): boolean;
   setReaction(messageId: string, userId: string, userName: string, reaction: string): Message | null;
   createChat(title: string, type: ChatType, createdBy: string, creatorName: string): Chat;
   joinChat(chatId: string, userId: string, name: string): Chat | null;
@@ -108,6 +110,28 @@ export function createInMemoryStore(): ChatStore {
       const message = createMessage(author, text, Date.now(), replyTo);
       chat.messages.push(message);
       return message;
+    },
+
+    editMessage(messageId: string, text: string) {
+      for (const chat of chats.values()) {
+        const msg = chat.messages.find((m) => m.id === messageId);
+        if (msg) {
+          msg.text = text;
+          return msg;
+        }
+      }
+      return null;
+    },
+
+    deleteMessage(messageId: string) {
+      for (const chat of chats.values()) {
+        const idx = chat.messages.findIndex((m) => m.id === messageId);
+        if (idx !== -1) {
+          chat.messages.splice(idx, 1);
+          return true;
+        }
+      }
+      return false;
     },
 
     setReaction(messageId: string, userId: string, userName: string, reaction: string) {

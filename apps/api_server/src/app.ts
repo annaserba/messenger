@@ -5,7 +5,7 @@ import { handleChatRoutes } from './routes/chatRoutes.ts';
 import { handlePushRoutes } from './routes/pushRoutes.ts';
 import { sendJson } from './http/json.ts';
 import type { AppConfig } from './config/env.ts';
-import type { ChatStore } from './data/pgStore.ts';
+import type { ChatStore } from './data/inMemoryStore.ts';
 import type { SessionStore } from './data/inMemorySessionStore.ts';
 import type { PushStore } from './ws/pushStore.ts';
 
