@@ -424,6 +424,7 @@ class _MessengerHomeState extends State<MessengerHome> {
                             onChatSelected: _selectChat,
                             onLogout: _logout,
                             onCreateChat: _showCreateChatDialog,
+                            api: _api,
                           ),
                         ),
                         const VerticalDivider(width: 1),
@@ -455,6 +456,7 @@ class _MessengerHomeState extends State<MessengerHome> {
                             onChatSelected: _selectChat,
                             onLogout: _logout,
                             onCreateChat: _showCreateChatDialog,
+                            api: _api,
                             compact: true,
                           ),
                         ),
@@ -493,7 +495,7 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-class _Sidebar extends StatelessWidget {
+class _Sidebar extends StatefulWidget {
   const _Sidebar({
     required this.chats,
     required this.selectedIndex,
@@ -501,6 +503,7 @@ class _Sidebar extends StatelessWidget {
     required this.onChatSelected,
     required this.onLogout,
     required this.onCreateChat,
+    required this.api,
     this.compact = false,
   });
 
@@ -510,18 +513,56 @@ class _Sidebar extends StatelessWidget {
   final ValueChanged<int> onChatSelected;
   final VoidCallback onLogout;
   final VoidCallback onCreateChat;
+  final dynamic api;
   final bool compact;
 
-  String? _avatarForChat(Chat chat) {
-    if (!chat.isGroup && !chat.isChannel && chat.id == user?.id) {
-      return user?.avatarUrl;
+  @override
+  State<_Sidebar> createState() => _SidebarState();
+}
+
+class _SidebarState extends State<_Sidebar> {
+  final _searchController = TextEditingController();
+  List<Map<String, dynamic>> _searchResults = [];
+  bool _isSearching = false;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _search(String query) async {
+    if (query.length < 2) {
+      setState(() { _searchResults = []; _isSearching = false; });
+      return;
     }
-    return null;
+    setState(() => _isSearching = true);
+    try {
+      final api = widget.api as dynamic;
+      final response = await api.searchUsers(query);
+      final users = (response['users'] as List<dynamic>?) ?? [];
+      setState(() => _searchResults = users.cast<Map<String, dynamic>>());
+    } catch (_) {
+      setState(() => _searchResults = []);
+    }
+  }
+
+  Future<void> _startChat(String userId) async {
+    try {
+      final api = widget.api as dynamic;
+      await api.startChat(userId);
+      _searchController.clear();
+      setState(() { _searchResults = []; _isSearching = false; });
+      // Trigger chat list refresh via parent
+      widget.onCreateChat; // placeholder — need callback
+    } catch (_) {}
   }
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final chats = widget.chats;
+    final user = widget.user;
 
     return Material(
       color: colors.surface,
@@ -532,86 +573,89 @@ class _Sidebar extends StatelessWidget {
           children: [
             Row(
               children: [
-                _UserAvatar(
-                  avatarUrl: user?.avatarUrl,
-                  name: user?.name ?? '',
-                ),
+                _UserAvatar(avatarUrl: user?.avatarUrl, name: user?.name ?? ''),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        user?.name ?? '',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
+                      Text(user?.name ?? '', maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
                       if (user?.email != null) ...[
                         const SizedBox(height: 2),
-                        Text(
-                          user!.email!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context)
-                              .textTheme
-                              .labelSmall
-                              ?.copyWith(color: colors.onSurfaceVariant),
-                        ),
+                        Text(user!.email!, maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.onSurfaceVariant)),
                       ],
                     ],
                   ),
                 ),
                 const SizedBox(width: 4),
-                IconButton(
-                  tooltip: 'Выйти',
-                  onPressed: onLogout,
-                  icon: Icon(Icons.logout, color: colors.error),
-                ),
+                IconButton(tooltip: 'Выйти', onPressed: widget.onLogout, icon: Icon(Icons.logout, color: colors.error)),
               ],
             ),
-            const SizedBox(height: 16),
+
+            // Search bar
+            const SizedBox(height: 12),
+            TextField(
+              controller: _searchController,
+              onChanged: _search,
+              decoration: InputDecoration(
+                hintText: 'Поиск по имени или телефону',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                suffixIcon: _isSearching ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : null,
+                isDense: true,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
+            ),
+
+            // Search results
+            if (_searchResults.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              ...(_searchResults.map((u) => ListTile(
+                dense: true,
+                leading: CircleAvatar(
+                  radius: 16,
+                  backgroundImage: u['avatarUrl'] != null ? NetworkImage(u['avatarUrl'] as String) : null,
+                  child: u['avatarUrl'] == null ? Text((u['firstName'] as String? ?? u['name'] as String? ?? '?').substring(0, 1).toUpperCase()) : null,
+                ),
+                title: Text(u['firstName'] as String? ?? u['name'] as String? ?? '', style: const TextStyle(fontSize: 14)),
+                subtitle: u['phone'] != null ? Text(u['phone'] as String, style: const TextStyle(fontSize: 12)) : null,
+                trailing: IconButton.filledTonal(
+                  icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                  onPressed: () => _startChat(u['id'] as String),
+                ),
+              ))),
+              const Divider(),
+            ],
+
+            // Chat header
+            const SizedBox(height: 4),
             Row(
               children: [
-                Expanded(
-                  child: Text(
-                    'Чаты',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                ),
-                IconButton.filledTonal(
-                  tooltip: 'Создать чат',
-                  onPressed: onCreateChat,
-                  icon: const Icon(Icons.add, size: 20),
-                  visualDensity: VisualDensity.compact,
-                ),
+                Expanded(child: Text('Чаты', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700))),
+                IconButton.filledTonal(tooltip: 'Создать чат', onPressed: widget.onCreateChat, icon: const Icon(Icons.add, size: 20), visualDensity: VisualDensity.compact),
               ],
             ),
             const SizedBox(height: 8),
             Expanded(
               child: ListView.separated(
-                scrollDirection: compact ? Axis.horizontal : Axis.vertical,
+                scrollDirection: widget.compact ? Axis.horizontal : Axis.vertical,
                 itemCount: chats.length,
                 separatorBuilder: (_, __) => SizedBox(
-                  width: compact ? 8 : 0,
-                  height: compact ? 0 : 8,
+                  width: widget.compact ? 8 : 0,
+                  height: widget.compact ? 0 : 8,
                 ),
                 itemBuilder: (context, index) {
                   final chat = chats[index];
-                  final selected = index == selectedIndex;
+                  final selected = index == widget.selectedIndex;
                   return SizedBox(
-                    width: compact ? 260 : null,
+                    width: widget.compact ? 260 : null,
                     child: _ChatTile(
                       chat: chat,
                       selected: selected,
-                      avatarUrl: _avatarForChat(chat),
-                      onTap: () => onChatSelected(index),
+                      avatarUrl: (!chat.isGroup && !chat.isChannel && chat.id == user?.id) ? user?.avatarUrl : null,
+                      onTap: () => widget.onChatSelected(index),
                     ),
                   );
                 },

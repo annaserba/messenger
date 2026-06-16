@@ -37,6 +37,14 @@ class ApiClient {
     return _request('POST', '/api/chats/$chatId/join');
   }
 
+  Future<Map<String, dynamic>> searchUsers(String query) {
+    return _request('GET', '/api/users/search?q=${Uri.encodeComponent(query)}');
+  }
+
+  Future<Map<String, dynamic>> startChat(String userId) {
+    return _request('POST', '/api/chats/start', body: {'userId': userId});
+  }
+
   Future<Map<String, dynamic>> fetchChats() {
     return _request('GET', '/api/chats');
   }

@@ -2,13 +2,15 @@ import { createApp } from './app.ts';
 import { config } from './config/env.ts';
 import { createInMemoryStore } from './data/inMemoryStore.ts';
 import { createInMemorySessionStore } from './data/inMemorySessionStore.ts';
+import { createInMemoryUserStore } from './data/userStore.ts';
 import { createWsServer } from './ws/wsServer.ts';
 import { createPushStore } from './ws/pushStore.ts';
 
 const store = createInMemoryStore();
 const sessionStore = createInMemorySessionStore();
+const userStore = createInMemoryUserStore();
 const pushStore = createPushStore(config);
-const app = createApp({ config, store, sessionStore, pushStore });
+const app = createApp({ config, store, sessionStore, pushStore, userStore });
 
 const ws = createWsServer(app.server, sessionStore);
 app.setBroadcast((chatId, event) => ws.broadcast(chatId, event as Parameters<typeof ws.broadcast>[1]));

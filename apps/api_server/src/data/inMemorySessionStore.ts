@@ -7,6 +7,7 @@ export type AuthUser = {
   avatarUrl?: string;
   firstName?: string;
   lastName?: string;
+  phone?: string;
   provider: 'yandex' | 'yandex-demo';
 };
 
