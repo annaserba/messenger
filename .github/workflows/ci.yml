@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend (Node.js)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api_server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: apps/api_server/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit src/server.ts
+        continue-on-error: true
+      - run: node --check src/server.ts
+      - name: Start server & smoke test
+        run: |
+          node src/server.ts &
+          SERVER_PID=$!
+          sleep 2
+          curl -sf http://127.0.0.1:3000/health || (kill $SERVER_PID && exit 1)
+          curl -sf -X POST http://127.0.0.1:3000/api/auth/yandex/demo || (kill $SERVER_PID && exit 1)
+          kill $SERVER_PID
+
+  flutter:
+    name: Flutter
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/flutter_app
+    env:
+      PUB_HOSTED_URL: https://pub.flutter-io.cn
+      FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.3'
+          channel: 'stable'
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test

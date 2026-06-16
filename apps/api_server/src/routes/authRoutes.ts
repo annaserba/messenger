@@ -125,9 +125,12 @@ async function handleYandexCallback({
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: tokenBody,
+  }).catch((err) => {
+    console.error('Yandex token fetch failed:', err.message, err.cause);
+    return null;
   });
 
-  if (!tokenResponse.ok) {
+  if (!tokenResponse || !tokenResponse.ok) {
     redirect(res, `${config.frontendUrl}?auth=token_failed`);
     return;
   }
@@ -135,9 +138,12 @@ async function handleYandexCallback({
   const token = (await tokenResponse.json()) as YandexTokenResponse;
   const profileResponse = await fetch('https://login.yandex.ru/info?format=json', {
     headers: { Authorization: `OAuth ${token.access_token}` },
+  }).catch((err) => {
+    console.error('Yandex profile fetch failed:', err.message, err.cause);
+    return null;
   });
 
-  if (!profileResponse.ok) {
+  if (!profileResponse || !profileResponse.ok) {
     redirect(res, `${config.frontendUrl}?auth=profile_failed`);
     return;
   }
