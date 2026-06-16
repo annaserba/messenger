@@ -25,6 +25,17 @@ class ApiClient {
     return _request('GET', '/api/auth/me');
   }
 
+  Future<Map<String, dynamic>> createChat({
+    required String title,
+    required String type,
+  }) {
+    return _request('POST', '/api/chats', body: {'title': title, 'type': type});
+  }
+
+  Future<Map<String, dynamic>> joinChat(String chatId) {
+    return _request('POST', '/api/chats/$chatId/join');
+  }
+
   Future<Map<String, dynamic>> fetchChats() {
     return _request('GET', '/api/chats');
   }

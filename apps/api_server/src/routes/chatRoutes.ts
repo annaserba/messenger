@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 
 import type { SessionStore } from '../data/inMemorySessionStore.ts';
 import type { ChatStore } from '../data/inMemoryStore.ts';
+import type { ChatType } from '../domain/message.ts';
 import { readJson, sendJson } from '../http/json.ts';
 
 type RouteContext = {
@@ -36,6 +37,37 @@ export async function handleChatRoutes({
 
   if (req.method === 'GET' && url.pathname === '/api/chats') {
     sendJson(res, 200, { chats: store.listChats(userId) });
+    return true;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/chats') {
+    const body = await readJson(req);
+    const title = String(body.title ?? '').trim();
+    const type = (String(body.type ?? 'group').trim()) as ChatType;
+
+    if (!title) {
+      sendJson(res, 400, { error: 'title_required' });
+      return true;
+    }
+    if (!['group', 'channel'].includes(type)) {
+      sendJson(res, 400, { error: 'type_must_be_group_or_channel' });
+      return true;
+    }
+
+    const chat = store.createChat(title, type, userId, userName);
+    sendJson(res, 201, { chat: { ...chat, lastMessage: undefined } });
+    return true;
+  }
+
+  const joinMatch = url.pathname.match(/^\/api\/chats\/([^/]+)\/join$/);
+  if (req.method === 'POST' && joinMatch) {
+    const chatId = joinMatch[1] ?? '';
+    const chat = store.joinChat(chatId, userId, userName);
+    if (!chat) {
+      sendJson(res, 404, { error: 'chat_not_found' });
+      return true;
+    }
+    sendJson(res, 200, { chat: { ...chat, lastMessage: undefined } });
     return true;
   }
 

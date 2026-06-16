@@ -1,6 +1,16 @@
-import { createMessage, type Chat, type Message } from '../domain/message.ts';
+import { createMessage, makeParticipant, type Chat, type ChatType, type Message } from '../domain/message.ts';
 
-export type PublicChat = Omit<Chat, 'messages'> & { messages: Message[]; lastMessage?: Message };
+export type PublicChat = {
+  id: string;
+  title: string;
+  subtitle: string;
+  avatarLabel: string;
+  isOnline: boolean;
+  type: ChatType;
+  participants: Chat['participants'];
+  messages: Message[];
+  lastMessage?: Message;
+};
 
 export type ChatStore = {
   listChats(userId: string): PublicChat[];
@@ -8,20 +18,35 @@ export type ChatStore = {
   findChatByMessage(messageId: string): Chat | undefined;
   addMessage(chatId: string, author: string, text: string): Message | null;
   setReaction(messageId: string, reaction: string): Message | null;
+  createChat(title: string, type: ChatType, createdBy: string, creatorName: string): Chat;
+  joinChat(chatId: string, userId: string, name: string): Chat | null;
   ensureUserChats(userId: string, name: string): void;
 };
 
 export function createInMemoryStore(): ChatStore {
   const chats = new Map<string, Chat>();
 
-  function makeChat(id: string, title: string, isGroup: boolean, members: string[]): Chat {
+  function makeChat(
+    id: string,
+    title: string,
+    type: ChatType,
+    createdBy: string,
+    creatorName: string,
+    extraParticipants: { userId: string; name: string }[] = [],
+  ): Chat {
+    const participants = [makeParticipant(createdBy, creatorName, 'admin')];
+    for (const p of extraParticipants) {
+      participants.push(makeParticipant(p.userId, p.name));
+    }
     const chat: Chat = {
       id,
       title,
-      subtitle: isGroup ? 'Групповой чат' : '',
+      subtitle: type === 'channel' ? 'канал' : type === 'group' ? 'группа' : '',
       avatarLabel: title.substring(0, 1).toUpperCase(),
       isOnline: false,
-      isGroup,
+      type,
+      createdBy,
+      participants,
       messages: [],
     };
     chats.set(id, chat);
@@ -30,12 +55,7 @@ export function createInMemoryStore(): ChatStore {
 
   function ensureUserChats(userId: string, name: string) {
     if (!chats.has(userId)) {
-      const chat = makeChat(userId, name, false, [userId]);
-      chat.subtitle = 'онлайн';
-      chat.isOnline = true;
-      chat.messages.push(
-        createMessage(name, 'Привет! Это ваш личный чат.', Date.now() - 60_000),
-      );
+      makeChat(userId, name, 'personal', userId, name);
     }
   }
 
@@ -43,8 +63,13 @@ export function createInMemoryStore(): ChatStore {
     listChats(userId: string) {
       const result: PublicChat[] = [];
       for (const chat of chats.values()) {
-        if (chat.id === userId) {
-          result.push({ ...chat, lastMessage: chat.messages.at(-1) });
+        const isMember = chat.participants.some((p) => p.userId === userId);
+        if (isMember) {
+          result.push({
+            ...chat,
+            subtitle: chat.type === 'personal' ? '' : chat.subtitle,
+            lastMessage: chat.messages.at(-1),
+          });
         }
       }
       return result;
@@ -78,6 +103,19 @@ export function createInMemoryStore(): ChatStore {
         }
       }
       return null;
+    },
+
+    createChat(title: string, type: ChatType, createdBy: string, creatorName: string) {
+      const id = `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      return makeChat(id, title, type, createdBy, creatorName);
+    },
+
+    joinChat(chatId: string, userId: string, name: string) {
+      const chat = chats.get(chatId);
+      if (!chat) return null;
+      if (chat.participants.some((p) => p.userId === userId)) return chat;
+      chat.participants.push(makeParticipant(userId, name));
+      return chat;
     },
 
     ensureUserChats,

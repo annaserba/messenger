@@ -265,6 +265,70 @@ class _MessengerHomeState extends State<MessengerHome> {
     });
   }
 
+  Future<void> _createChat(String title, String type) async {
+    try {
+      await _api.createChat(title: title, type: type);
+      await _loadChats();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Не удалось создать чат.';
+      });
+    }
+  }
+
+  void _showCreateChatDialog() {
+    final nameCtrl = TextEditingController();
+    String chatType = 'group';
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              title: const Text('Новый чат'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameCtrl,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Название',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(value: 'group', label: Text('Группа'), icon: Icon(Icons.group)),
+                      ButtonSegment(value: 'channel', label: Text('Канал'), icon: Icon(Icons.campaign)),
+                    ],
+                    selected: {chatType},
+                    onSelectionChanged: (v) => setDialogState(() => chatType = v.first),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
+                FilledButton(
+                  onPressed: () {
+                    final name = nameCtrl.text.trim();
+                    if (name.isEmpty) return;
+                    Navigator.pop(ctx);
+                    _createChat(name, chatType);
+                  },
+                  child: const Text('Создать'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_isSignedIn) {
@@ -304,6 +368,7 @@ class _MessengerHomeState extends State<MessengerHome> {
                             user: _user,
                             onChatSelected: _selectChat,
                             onLogout: _logout,
+                            onCreateChat: _showCreateChatDialog,
                           ),
                         ),
                         const VerticalDivider(width: 1),
@@ -332,6 +397,7 @@ class _MessengerHomeState extends State<MessengerHome> {
                             user: _user,
                             onChatSelected: _selectChat,
                             onLogout: _logout,
+                            onCreateChat: _showCreateChatDialog,
                             compact: true,
                           ),
                         ),
@@ -375,6 +441,7 @@ class _Sidebar extends StatelessWidget {
     required this.user,
     required this.onChatSelected,
     required this.onLogout,
+    required this.onCreateChat,
     this.compact = false,
   });
 
@@ -383,6 +450,7 @@ class _Sidebar extends StatelessWidget {
   final User? user;
   final ValueChanged<int> onChatSelected;
   final VoidCallback onLogout;
+  final VoidCallback onCreateChat;
   final bool compact;
 
   @override
@@ -440,12 +508,24 @@ class _Sidebar extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 16),
-            Text(
-              'Чаты',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w700),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Чаты',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                IconButton.filledTonal(
+                  tooltip: 'Создать чат',
+                  onPressed: onCreateChat,
+                  icon: const Icon(Icons.add, size: 20),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             Expanded(
@@ -537,7 +617,18 @@ class _ChatTile extends StatelessWidget {
             Stack(
               clipBehavior: Clip.none,
               children: [
-                CircleAvatar(child: Text(chat.avatarLabel)),
+                CircleAvatar(
+                  backgroundColor: chat.isChannel
+                      ? colors.tertiary
+                      : chat.isGroup
+                          ? colors.secondary
+                          : null,
+                  child: chat.isChannel
+                      ? const Icon(Icons.campaign, size: 18)
+                      : chat.isGroup
+                          ? const Icon(Icons.group, size: 18)
+                          : Text(chat.avatarLabel),
+                ),
                 if (chat.isOnline)
                   Positioned(
                     right: -1,
@@ -578,7 +669,11 @@ class _ChatTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    lastMessage?.text ?? 'Нет сообщений',
+                    chat.isChannel
+                        ? 'канал · ${chat.participantCount} подписчиков'
+                        : chat.isGroup
+                            ? '${chat.participantCount} участников'
+                            : lastMessage?.text ?? 'Нет сообщений',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall,
@@ -624,7 +719,18 @@ class _ChatView extends StatelessWidget {
           color: colors.surface,
           child: Row(
             children: [
-              CircleAvatar(child: Text(chat.avatarLabel)),
+              CircleAvatar(
+                backgroundColor: chat.isChannel
+                    ? colors.tertiary
+                    : chat.isGroup
+                        ? colors.secondary
+                        : null,
+                child: chat.isChannel
+                    ? const Icon(Icons.campaign, size: 18)
+                    : chat.isGroup
+                        ? const Icon(Icons.group, size: 18)
+                        : Text(chat.avatarLabel),
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
