@@ -8,6 +8,7 @@ type RouteContext = {
   res: ServerResponse;
   url: URL;
   store: ChatStore;
+  broadcast: (chatId: string, event: Record<string, unknown>) => void;
 };
 
 export async function handleChatRoutes({
@@ -15,6 +16,7 @@ export async function handleChatRoutes({
   res,
   url,
   store,
+  broadcast,
 }: RouteContext): Promise<boolean> {
   if (req.method === 'GET' && url.pathname === '/api/chats') {
     sendJson(res, 200, { chats: store.listChats() });
@@ -46,6 +48,9 @@ export async function handleChatRoutes({
       }
 
       const created = store.addMessage(chatId, author, text);
+      if (created) {
+        broadcast(chatId, { type: 'message', chatId, message: created });
+      }
       sendJson(res, 201, { message: created });
       return true;
     }
@@ -62,6 +67,10 @@ export async function handleChatRoutes({
       return true;
     }
 
+    const chat = store.findChatByMessage(reactionMatch[1] ?? '');
+    if (chat) {
+      broadcast(chat.id, { type: 'reaction', chatId: chat.id, message: target });
+    }
     sendJson(res, 200, { message: target });
     return true;
   }

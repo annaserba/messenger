@@ -5,6 +5,7 @@ export type PublicChat = Chat;
 export type ChatStore = {
   listChats(): PublicChat[];
   findChat(chatId: string): Chat | undefined;
+  findChatByMessage(messageId: string): Chat | undefined;
   addMessage(chatId: string, author: string, text: string): Message | null;
   setReaction(messageId: string, reaction: string): Message | null;
 };
@@ -46,6 +47,12 @@ export function createInMemoryStore(): ChatStore {
 
     findChat(chatId: string) {
       return chats.find((chat) => chat.id === chatId);
+    },
+
+    findChatByMessage(messageId: string) {
+      return chats.find((chat) =>
+        chat.messages.some((m) => m.id === messageId)
+      );
     },
 
     addMessage(chatId: string, author: string, text: string) {

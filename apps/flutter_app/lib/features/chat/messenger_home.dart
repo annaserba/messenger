@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/storage/session_storage.dart';
+import '../../core/ws/ws_client.dart';
 import '../../models/chat.dart';
 import '../../models/message.dart';
 import '../../models/user.dart';
@@ -29,17 +30,18 @@ class _MessengerHomeState extends State<MessengerHome> {
   bool _isSignedIn = false;
   bool _isLoading = false;
   String? _error;
-  Timer? _pollingTimer;
+  late final WsClient _ws;
 
   @override
   void initState() {
     super.initState();
+    _ws = WsClient(baseUrl: _api.baseUrl);
     _consumeAuthRedirect();
   }
 
   @override
   void dispose() {
-    _pollingTimer?.cancel();
+    _ws.disconnect();
     _messageController.dispose();
     _messageFocus.dispose();
     super.dispose();
@@ -81,7 +83,7 @@ class _MessengerHomeState extends State<MessengerHome> {
       });
 
       await _loadChats();
-      _startPolling();
+      _connectWs();
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -113,7 +115,7 @@ class _MessengerHomeState extends State<MessengerHome> {
       });
 
       await _loadChats();
-      _startPolling();
+      _connectWs();
     } catch (_) {
       await clearSession();
       if (!mounted) return;
@@ -158,7 +160,7 @@ class _MessengerHomeState extends State<MessengerHome> {
       });
 
       await _loadChats();
-      _startPolling();
+      _connectWs();
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -188,14 +190,17 @@ class _MessengerHomeState extends State<MessengerHome> {
     });
   }
 
-  void _startPolling() {
-    _pollingTimer?.cancel();
-    _pollingTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
-      if (!_isSignedIn) return;
-      try {
-        await _loadChats();
-      } catch (_) {}
-    });
+  Future<void> _connectWs() async {
+    final token = _api.accessToken;
+    if (token == null) return;
+    await _ws.connect(token: token, onEvent: _onWsEvent);
+  }
+
+  void _onWsEvent(Map<String, dynamic> event) {
+    final type = event['type'] as String?;
+    if (type == 'message' || type == 'reaction') {
+      _loadChats();
+    }
   }
 
   void _selectChat(int index) {
@@ -248,8 +253,8 @@ class _MessengerHomeState extends State<MessengerHome> {
   }
 
   Future<void> _logout() async {
+    _ws.disconnect();
     await clearSession();
-    _pollingTimer?.cancel();
     if (!mounted) return;
     setState(() {
       _api.accessToken = null;

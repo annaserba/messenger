@@ -14,7 +14,9 @@ type AppDependencies = {
 };
 
 export function createApp({ config, store, sessionStore }: AppDependencies) {
-  return createServer(async (req: IncomingMessage, res: ServerResponse) => {
+  let _broadcast: ((chatId: string, event: Record<string, unknown>) => void) | null = null;
+
+  const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
       const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
 
@@ -28,8 +30,9 @@ export function createApp({ config, store, sessionStore }: AppDependencies) {
         return;
       }
 
+      const broadcast = _broadcast ?? (() => {});
       if (await handleAuthRoutes({ req, res, url, config, sessionStore })) return;
-      if (await handleChatRoutes({ req, res, url, store })) return;
+      if (await handleChatRoutes({ req, res, url, store, broadcast })) return;
 
       sendJson(res, 404, { error: 'not_found' });
     } catch (error) {
@@ -39,4 +42,11 @@ export function createApp({ config, store, sessionStore }: AppDependencies) {
       });
     }
   });
+
+  return {
+    server,
+    setBroadcast(fn: (chatId: string, event: Record<string, unknown>) => void) {
+      _broadcast = fn;
+    },
+  };
 }

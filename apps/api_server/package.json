@@ -7,5 +7,8 @@
     "dev": "/Users/serba/.nvm/versions/node/v25.2.1/bin/node src/server.ts",
     "start": "/Users/serba/.nvm/versions/node/v25.2.1/bin/node src/server.ts",
     "check": "/Users/serba/.nvm/versions/node/v25.2.1/bin/node --check src/server.ts"
+  },
+  "dependencies": {
+    "ws": "^8.21.0"
   }
 }
