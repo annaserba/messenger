@@ -162,7 +162,6 @@ class _MessengerHomeState extends State<MessengerHome> {
         _userName = user.firstName ?? user.name;
         _nameController.text = _userName;
         _isSignedIn = true;
-        _error = 'Яндекс OAuth не настроен, включён демо-вход.';
       });
 
       await _loadChats();
