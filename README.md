@@ -80,55 +80,62 @@ apps/
         └── models/           # User, Chat, Message
 ```
 
-## Схема БД (целевая)
+## Схема БД
 
-```sql
-CREATE TABLE users (
-  id          UUID PRIMARY KEY,
-  yandex_id   TEXT UNIQUE NOT NULL,
-  name        TEXT NOT NULL,
-  email       TEXT,
-  avatar_url  TEXT,
-  first_name  TEXT,
-  last_name   TEXT,
-  created_at  TIMESTAMPTZ DEFAULT now()
-);
+```mermaid
+erDiagram
+  users {
+    uuid id PK
+    text yandex_id UK
+    text name
+    text email
+    text avatar_url
+    text first_name
+    text last_name
+    timestamptz created_at
+  }
 
-CREATE TABLE chats (
-  id          UUID PRIMARY KEY,
-  title       TEXT NOT NULL,
-  type        TEXT NOT NULL CHECK (type IN ('personal','group','channel')),
-  created_by  UUID REFERENCES users(id),
-  created_at  TIMESTAMPTZ DEFAULT now()
-);
+  chats {
+    uuid id PK
+    text title
+    text type "personal|group|channel"
+    uuid created_by FK
+    timestamptz created_at
+  }
 
-CREATE TABLE chat_participants (
-  chat_id     UUID REFERENCES chats(id) ON DELETE CASCADE,
-  user_id     UUID REFERENCES users(id),
-  role        TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('admin','member')),
-  joined_at   TIMESTAMPTZ DEFAULT now(),
-  PRIMARY KEY (chat_id, user_id)
-);
+  chat_participants {
+    uuid chat_id PK,FK
+    uuid user_id PK,FK
+    text role "admin|member"
+    timestamptz joined_at
+  }
 
-CREATE TABLE messages (
-  id          UUID PRIMARY KEY,
-  chat_id     UUID REFERENCES chats(id) ON DELETE CASCADE,
-  author_id   UUID REFERENCES users(id),
-  text        TEXT NOT NULL,
-  sent_at     TIMESTAMPTZ DEFAULT now()
-);
-CREATE INDEX idx_messages_chat_time ON messages(chat_id, sent_at);
+  messages {
+    uuid id PK
+    uuid chat_id FK
+    uuid author_id FK
+    text text
+    timestamptz sent_at
+  }
 
-CREATE TABLE reactions (
-  message_id  UUID REFERENCES messages(id) ON DELETE CASCADE,
-  user_id     UUID REFERENCES users(id),
-  emoji       TEXT NOT NULL,
-  PRIMARY KEY (message_id, user_id, emoji)
-);
+  reactions {
+    uuid message_id PK,FK
+    uuid user_id PK,FK
+    text emoji PK
+  }
 
-CREATE TABLE user_sessions (
-  token       TEXT PRIMARY KEY,
-  user_id     UUID REFERENCES users(id),
-  created_at  TIMESTAMPTZ DEFAULT now()
-);
+  user_sessions {
+    text token PK
+    uuid user_id FK
+    timestamptz created_at
+  }
+
+  users ||--o{ chats : creates
+  users ||--o{ chat_participants : joins
+  users ||--o{ messages : authors
+  users ||--o{ reactions : reacts
+  users ||--o{ user_sessions : has
+  chats ||--o{ chat_participants : contains
+  chats ||--o{ messages : contains
+  messages ||--o{ reactions : has
 ```
