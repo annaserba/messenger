@@ -2,8 +2,7 @@
 
 Приватный AI-native мессенджер. Flutter (iOS/Android/Web) + TypeScript backend.
 
-[Архитектура](./docs/ai-native-messenger-architecture.ru.md) ·
-[Вопросы к собеседованию](./docs/interview-questions.ru.md)
+[Архитектура](./docs/ai-native-messenger-architecture.ru.md)
 
 ## Быстрый старт
 
