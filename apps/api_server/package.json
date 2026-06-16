@@ -1,0 +1,11 @@
+{
+  "name": "messenger-api-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "/Users/serba/.nvm/versions/node/v25.2.1/bin/node src/server.ts",
+    "start": "/Users/serba/.nvm/versions/node/v25.2.1/bin/node src/server.ts",
+    "check": "/Users/serba/.nvm/versions/node/v25.2.1/bin/node --check src/server.ts"
+  }
+}
