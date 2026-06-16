@@ -283,6 +283,10 @@ class _MessengerHomeState extends State<MessengerHome> {
     );
   }
 
+  void _quickReact(Message message) {
+    _reactTo(message, '👍');
+  }
+
   Future<void> _logout() async {
     _ws.disconnect();
     await clearSession();
@@ -414,6 +418,7 @@ class _MessengerHomeState extends State<MessengerHome> {
                                   onMessageChanged: _toggleTyping,
                                   onSend: _sendMessage,
                                   onLongPress: _showReactionPicker,
+                                  onDoubleTap: _quickReact,
                                 ),
                         ),
                       ],
@@ -444,6 +449,7 @@ class _MessengerHomeState extends State<MessengerHome> {
                                   onMessageChanged: _toggleTyping,
                                   onSend: _sendMessage,
                                   onLongPress: _showReactionPicker,
+                                  onDoubleTap: _quickReact,
                                 ),
                         ),
                       ],
@@ -728,6 +734,7 @@ class _ChatView extends StatelessWidget {
     required this.onMessageChanged,
     required this.onSend,
     required this.onLongPress,
+    required this.onDoubleTap,
   });
 
   final Chat chat;
@@ -737,6 +744,7 @@ class _ChatView extends StatelessWidget {
   final ValueChanged<String> onMessageChanged;
   final VoidCallback onSend;
   final void Function(Message message) onLongPress;
+  final void Function(Message message) onDoubleTap;
 
   @override
   Widget build(BuildContext context) {
@@ -805,6 +813,7 @@ class _ChatView extends StatelessWidget {
               return _MessageBubble(
                 message: message,
                 onLongPress: () => onLongPress(message),
+                onDoubleTap: () => onDoubleTap(message),
               );
             },
           ),
@@ -824,10 +833,12 @@ class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.message,
     required this.onLongPress,
+    required this.onDoubleTap,
   });
 
   final Message message;
   final VoidCallback onLongPress;
+  final VoidCallback onDoubleTap;
 
   @override
   Widget build(BuildContext context) {
@@ -845,6 +856,7 @@ class _MessageBubble extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: 6),
           child: GestureDetector(
             onLongPress: onLongPress,
+            onDoubleTap: onDoubleTap,
             child: Column(
               crossAxisAlignment: message.isMine
                   ? CrossAxisAlignment.end
