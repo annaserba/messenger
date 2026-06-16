@@ -9,27 +9,29 @@ void main() {
 class MessengerApp extends StatelessWidget {
   const MessengerApp({super.key});
 
+  static const _blue = Color(0xFF2AABEE);
+
   @override
   Widget build(BuildContext context) {
-    const seed = Color(0xFF2563EB);
-
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Messenger MVP',
+      title: 'Messenger',
+      themeMode: ThemeMode.system,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: seed,
+          seedColor: _blue,
           brightness: Brightness.light,
         ),
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFF7F8FA),
+        scaffoldBackgroundColor: Colors.white,
       ),
       darkTheme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: seed,
+          seedColor: _blue,
           brightness: Brightness.dark,
         ),
         useMaterial3: true,
+        scaffoldBackgroundColor: Colors.black,
       ),
       home: const MessengerHome(),
     );

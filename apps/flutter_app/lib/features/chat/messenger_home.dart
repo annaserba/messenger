@@ -837,9 +837,12 @@ class _ChatView extends StatelessWidget {
     return Column(
       children: [
         Container(
-          height: 72,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          color: colors.surface,
+          height: 64,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: colors.surface,
+            border: Border(bottom: BorderSide(color: colors.outlineVariant.withOpacity(0.3))),
+          ),
           child: Row(
             children: [
               CircleAvatar(
@@ -1046,14 +1049,16 @@ class _Composer extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-      color: colors.surface,
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(top: BorderSide(color: colors.outlineVariant.withOpacity(0.3))),
+      ),
       child: SafeArea(
         top: false,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            const SizedBox(width: 8),
             Expanded(
               child: TextField(
                 controller: controller,
@@ -1063,20 +1068,28 @@ class _Composer extends StatelessWidget {
                 textInputAction: TextInputAction.send,
                 onChanged: onChanged,
                 onSubmitted: (_) => onSend(),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   hintText: 'Сообщение',
+                  filled: true,
+                  fillColor: colors.surfaceContainerHighest,
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.all(Radius.circular(8)),
+                    borderRadius: BorderRadius.circular(24),
+                    borderSide: BorderSide.none,
                   ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                   isDense: true,
                 ),
               ),
             ),
             const SizedBox(width: 8),
-            IconButton.filled(
-              tooltip: 'Отправить',
-              onPressed: onSend,
-              icon: const Icon(Icons.send),
+            CircleAvatar(
+              radius: 22,
+              backgroundColor: colors.primary,
+              child: IconButton(
+                icon: const Icon(Icons.send_rounded, size: 20),
+                color: colors.onPrimary,
+                onPressed: onSend,
+              ),
             ),
           ],
         ),
