@@ -69,9 +69,10 @@ flutter precache
 ### Сообщения
 - [x] Отправка текстовых сообщений
 - [x] Автор сообщения определяется из сессии (не передаётся клиентом)
-- [x] Реакции 👍 ❤️ 😂 😮 😢 🙏 👏 🔥 🎉 💯 — лонг-пресс для выбора
+- [x] Двойной тап — быстрая реакция 👍
+- [x] Лонг-пресс — панель из 10 эмодзи (👍 ❤️ 😂 😮 😢 🙏 👏 🔥 🎉 💯)
 - [x] Несколько реакций от разных пользователей на одно сообщение
-- [x] Отображение счётчика реакций на пузыре сообщения
+- [x] Чипы с эмодзи и счётчиком на пузыре сообщения
 - [x] Отображение времени сообщений
 
 ### Realtime
@@ -89,18 +90,20 @@ flutter precache
 
 ```
 apps/
-├── api_server/     # TypeScript backend (Node 25, без фреймворка)
+├── api_server/     # TypeScript backend (Node 25, ws)
 │   └── src/
 │       ├── config/      # env-конфигурация
-│       ├── domain/      # доменные типы
+│       ├── domain/      # доменные типы (Chat, Message, Reaction)
 │       ├── data/        # in-memory хранилища (→ PostgreSQL/Redis)
 │       ├── http/        # JSON/CORS helpers
-│       └── routes/      # auth, chat endpoints
+│       ├── routes/      # auth, chat endpoints
+│       └── ws/          # WebSocket-сервер
 └── flutter_app/    # Flutter-клиент (нулевые внешние зависимости)
     └── lib/
-        ├── core/api/         # HTTP-клиент
+        ├── core/api/         # HTTP-клиент (REST)
+        ├── core/ws/          # WebSocket-клиент
         ├── core/storage/     # персистентность сессии
-        ├── features/auth/    # вход через Яндекс
+        ├── features/auth/    # вход через Яндекс OAuth / demo
         ├── features/chat/    # чаты, сообщения, реакции
         └── models/           # User, Chat, Message
 ```
