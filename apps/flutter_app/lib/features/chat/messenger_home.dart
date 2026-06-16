@@ -19,13 +19,11 @@ class MessengerHome extends StatefulWidget {
 
 class _MessengerHomeState extends State<MessengerHome> {
   final _api = ApiClient();
-  final _nameController = TextEditingController();
   final _messageController = TextEditingController();
   final _messageFocus = FocusNode();
 
   List<Chat> _chats = [];
   User? _user;
-  String _userName = '';
   int _selectedChatIndex = 0;
   bool _isTyping = false;
   bool _isSignedIn = false;
@@ -42,11 +40,12 @@ class _MessengerHomeState extends State<MessengerHome> {
   @override
   void dispose() {
     _pollingTimer?.cancel();
-    _nameController.dispose();
     _messageController.dispose();
     _messageFocus.dispose();
     super.dispose();
   }
+
+  String get _userName => _user?.name ?? '';
 
   Chat? get _selectedChat {
     if (_chats.isEmpty) return null;
@@ -77,8 +76,6 @@ class _MessengerHomeState extends State<MessengerHome> {
       if (!mounted) return;
       setState(() {
         _user = user;
-        _userName = user.firstName ?? user.name;
-        _nameController.text = _userName;
         _isSignedIn = true;
         _error = null;
       });
@@ -111,8 +108,6 @@ class _MessengerHomeState extends State<MessengerHome> {
       if (!mounted) return;
       setState(() {
         _user = user;
-        _userName = user.firstName ?? user.name;
-        _nameController.text = _userName;
         _isSignedIn = true;
         _error = null;
       });
@@ -159,8 +154,6 @@ class _MessengerHomeState extends State<MessengerHome> {
       if (!mounted) return;
       setState(() {
         _user = user;
-        _userName = user.firstName ?? user.name;
-        _nameController.text = _userName;
         _isSignedIn = true;
       });
 
@@ -203,19 +196,6 @@ class _MessengerHomeState extends State<MessengerHome> {
         await _loadChats();
       } catch (_) {}
     });
-  }
-
-  void _saveName() {
-    final nextName = _nameController.text.trim();
-    if (nextName.isEmpty) return;
-
-    setState(() {
-      _userName = nextName;
-      _chats = _chats
-          .map((chat) => Chat.fromJson(chat.toJson(), nextName))
-          .toList();
-    });
-    _messageFocus.requestFocus();
   }
 
   void _selectChat(int index) {
@@ -274,8 +254,6 @@ class _MessengerHomeState extends State<MessengerHome> {
     setState(() {
       _api.accessToken = null;
       _user = null;
-      _userName = '';
-      _nameController.clear();
       _isSignedIn = false;
       _chats = [];
       _error = null;
@@ -319,9 +297,6 @@ class _MessengerHomeState extends State<MessengerHome> {
                             chats: _chats,
                             selectedIndex: _selectedChatIndex,
                             user: _user,
-                            userName: _userName,
-                            nameController: _nameController,
-                            onNameSaved: _saveName,
                             onChatSelected: _selectChat,
                             onLogout: _logout,
                           ),
@@ -350,9 +325,6 @@ class _MessengerHomeState extends State<MessengerHome> {
                             chats: _chats,
                             selectedIndex: _selectedChatIndex,
                             user: _user,
-                            userName: _userName,
-                            nameController: _nameController,
-                            onNameSaved: _saveName,
                             onChatSelected: _selectChat,
                             onLogout: _logout,
                             compact: true,
@@ -396,9 +368,6 @@ class _Sidebar extends StatelessWidget {
     required this.chats,
     required this.selectedIndex,
     required this.user,
-    required this.userName,
-    required this.nameController,
-    required this.onNameSaved,
     required this.onChatSelected,
     required this.onLogout,
     this.compact = false,
@@ -407,9 +376,6 @@ class _Sidebar extends StatelessWidget {
   final List<Chat> chats;
   final int selectedIndex;
   final User? user;
-  final String userName;
-  final TextEditingController nameController;
-  final VoidCallback onNameSaved;
   final ValueChanged<int> onChatSelected;
   final VoidCallback onLogout;
   final bool compact;
@@ -429,24 +395,24 @@ class _Sidebar extends StatelessWidget {
               children: [
                 _UserAvatar(
                   avatarUrl: user?.avatarUrl,
-                  name: userName,
+                  name: user?.name ?? '',
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      TextField(
-                        controller: nameController,
-                        onSubmitted: (_) => onNameSaved(),
-                        decoration: const InputDecoration(
-                          labelText: 'Ваше имя',
-                          isDense: true,
-                          border: OutlineInputBorder(),
-                        ),
+                      Text(
+                        user?.name ?? '',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
                       ),
                       if (user?.email != null) ...[
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 2),
                         Text(
                           user!.email!,
                           maxLines: 1,
@@ -459,12 +425,6 @@ class _Sidebar extends StatelessWidget {
                       ],
                     ],
                   ),
-                ),
-                const SizedBox(width: 8),
-                IconButton.filledTonal(
-                  tooltip: 'Сохранить имя',
-                  onPressed: onNameSaved,
-                  icon: const Icon(Icons.check),
                 ),
                 const SizedBox(width: 4),
                 IconButton(
@@ -528,14 +488,15 @@ class _UserAvatar extends StatelessWidget {
         backgroundColor: colors.surfaceContainerHighest,
         backgroundImage: NetworkImage(avatarUrl!),
         onBackgroundImageError: (_, __) {},
-        child: Text(_initials(name)),
+        child: const Icon(Icons.person, size: 20),
       );
     }
 
     return CircleAvatar(
+      radius: 20,
       backgroundColor: colors.primary,
       foregroundColor: colors.onPrimary,
-      child: Text(_initials(name)),
+      child: const Icon(Icons.person, size: 20),
     );
   }
 }
@@ -855,11 +816,6 @@ class _Composer extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            IconButton.filledTonal(
-              tooltip: 'Добавить файл',
-              onPressed: () {},
-              icon: const Icon(Icons.attach_file),
-            ),
             const SizedBox(width: 8),
             Expanded(
               child: TextField(
@@ -890,12 +846,6 @@ class _Composer extends StatelessWidget {
       ),
     );
   }
-}
-
-String _initials(String value) {
-  final trimmed = value.trim();
-  if (trimmed.isEmpty) return '?';
-  return trimmed.substring(0, 1).toUpperCase();
 }
 
 String _timeLabel(DateTime date) {
