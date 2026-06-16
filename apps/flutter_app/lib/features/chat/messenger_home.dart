@@ -222,7 +222,7 @@ class _MessengerHomeState extends State<MessengerHome> {
     });
 
     try {
-      await _api.sendMessage(chatId: chat.id, author: _userName, text: text);
+      await _api.sendMessage(chatId: chat.id, text: text);
       await _loadChats();
     } catch (_) {
       if (!mounted) return;
@@ -493,15 +493,12 @@ class _UserAvatar extends StatelessWidget {
         backgroundColor: colors.surfaceContainerHighest,
         backgroundImage: NetworkImage(avatarUrl!),
         onBackgroundImageError: (_, __) {},
-        child: const Icon(Icons.person, size: 20),
       );
     }
 
     return CircleAvatar(
       radius: 20,
       backgroundColor: colors.primary,
-      foregroundColor: colors.onPrimary,
-      child: const Icon(Icons.person, size: 20),
     );
   }
 }

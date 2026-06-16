@@ -1,89 +1,85 @@
 import { createMessage, type Chat, type Message } from '../domain/message.ts';
 
-export type PublicChat = Chat;
+export type PublicChat = Omit<Chat, 'messages'> & { messages: Message[]; lastMessage?: Message };
 
 export type ChatStore = {
-  listChats(): PublicChat[];
+  listChats(userId: string): PublicChat[];
   findChat(chatId: string): Chat | undefined;
   findChatByMessage(messageId: string): Chat | undefined;
   addMessage(chatId: string, author: string, text: string): Message | null;
   setReaction(messageId: string, reaction: string): Message | null;
+  ensureUserChats(userId: string, name: string): void;
 };
 
 export function createInMemoryStore(): ChatStore {
-  const now = Date.now();
-  const chats: Chat[] = [
-    {
-      id: 'family',
-      title: 'Семья',
-      subtitle: 'Групповой чат',
-      avatarLabel: 'С',
+  const chats = new Map<string, Chat>();
+
+  function makeChat(id: string, title: string, isGroup: boolean, members: string[]): Chat {
+    const chat: Chat = {
+      id,
+      title,
+      subtitle: isGroup ? 'Групповой чат' : '',
+      avatarLabel: title.substring(0, 1).toUpperCase(),
       isOnline: false,
-      isGroup: true,
-      messages: [
-        createMessage('Мама', 'Кто сегодня сможет зайти за продуктами?', now - 34 * 60_000),
-        createMessage('Анна', 'Я смогу после работы. Напишите список.', now - 28 * 60_000, '👍'),
-        createMessage('Папа', 'Добавил молоко, хлеб и фрукты.', now - 12 * 60_000),
-      ],
-    },
-    {
-      id: 'misha',
-      title: 'Миша',
-      subtitle: 'онлайн',
-      avatarLabel: 'М',
-      isOnline: true,
-      isGroup: false,
-      messages: [
-        createMessage('Миша', 'Привет! Созвонимся вечером?', now - 68 * 60_000),
-        createMessage('Анна', 'Да, давай после 20:00.', now - 60 * 60_000),
-      ],
-    },
-  ];
+      isGroup,
+      messages: [],
+    };
+    chats.set(id, chat);
+    return chat;
+  }
+
+  function ensureUserChats(userId: string, name: string) {
+    if (!chats.has(userId)) {
+      const chat = makeChat(userId, name, false, [userId]);
+      chat.subtitle = 'онлайн';
+      chat.isOnline = true;
+      chat.messages.push(
+        createMessage(name, 'Привет! Это ваш личный чат.', Date.now() - 60_000),
+      );
+    }
+  }
 
   return {
-    listChats() {
-      return chats.map(publicChat);
+    listChats(userId: string) {
+      const result: PublicChat[] = [];
+      for (const chat of chats.values()) {
+        if (chat.id === userId) {
+          result.push({ ...chat, lastMessage: chat.messages.at(-1) });
+        }
+      }
+      return result;
     },
 
     findChat(chatId: string) {
-      return chats.find((chat) => chat.id === chatId);
+      return chats.get(chatId);
     },
 
     findChatByMessage(messageId: string) {
-      return chats.find((chat) =>
-        chat.messages.some((m) => m.id === messageId)
-      );
+      for (const chat of chats.values()) {
+        if (chat.messages.some((m) => m.id === messageId)) return chat;
+      }
+      return undefined;
     },
 
     addMessage(chatId: string, author: string, text: string) {
-      const chat = this.findChat(chatId);
+      const chat = chats.get(chatId);
       if (!chat) return null;
-
       const message = createMessage(author, text, Date.now());
       chat.messages.push(message);
       return message;
     },
 
     setReaction(messageId: string, reaction: string) {
-      const target = chats
-        .flatMap((chat) => chat.messages)
-        .find((message) => message.id === messageId);
-
-      if (!target) return null;
-      target.reaction = target.reaction === reaction ? null : reaction;
-      return target;
+      for (const chat of chats.values()) {
+        const target = chat.messages.find((m) => m.id === messageId);
+        if (target) {
+          target.reaction = target.reaction === reaction ? null : reaction;
+          return target;
+        }
+      }
+      return null;
     },
-  };
-}
 
-function publicChat(chat: Chat): PublicChat {
-  return {
-    id: chat.id,
-    title: chat.title,
-    subtitle: chat.subtitle,
-    avatarLabel: chat.avatarLabel,
-    isOnline: chat.isOnline,
-    isGroup: chat.isGroup,
-    messages: chat.messages,
+    ensureUserChats,
   };
 }

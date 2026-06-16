@@ -32,13 +32,12 @@ class ApiClient {
 
   Future<Map<String, dynamic>> sendMessage({
     required String chatId,
-    required String author,
     required String text,
   }) {
     return _request(
       'POST',
       '/api/chats/$chatId/messages',
-      body: {'author': author, 'text': text},
+      body: {'text': text},
     );
   }
 

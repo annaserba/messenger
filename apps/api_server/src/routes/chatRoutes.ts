@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
+import type { SessionStore } from '../data/inMemorySessionStore.ts';
 import type { ChatStore } from '../data/inMemoryStore.ts';
 import { readJson, sendJson } from '../http/json.ts';
 
@@ -8,6 +9,7 @@ type RouteContext = {
   res: ServerResponse;
   url: URL;
   store: ChatStore;
+  sessionStore: SessionStore;
   broadcast: (chatId: string, event: Record<string, unknown>) => void;
 };
 
@@ -16,10 +18,24 @@ export async function handleChatRoutes({
   res,
   url,
   store,
+  sessionStore,
   broadcast,
 }: RouteContext): Promise<boolean> {
+  const token = getBearerToken(req);
+  const session = token ? sessionStore.findByToken(token) : null;
+
+  if (!session) {
+    sendJson(res, 401, { error: 'unauthorized' });
+    return true;
+  }
+
+  const userId = session.user.id;
+  const userName = session.user.firstName ?? session.user.name;
+
+  store.ensureUserChats(userId, userName);
+
   if (req.method === 'GET' && url.pathname === '/api/chats') {
-    sendJson(res, 200, { chats: store.listChats() });
+    sendJson(res, 200, { chats: store.listChats(userId) });
     return true;
   }
 
@@ -39,15 +55,14 @@ export async function handleChatRoutes({
 
     if (req.method === 'POST') {
       const body = await readJson(req);
-      const author = String(body.author ?? '').trim();
       const text = String(body.text ?? '').trim();
 
-      if (!author || !text) {
-        sendJson(res, 400, { error: 'author_and_text_required' });
+      if (!text) {
+        sendJson(res, 400, { error: 'text_required' });
         return true;
       }
 
-      const created = store.addMessage(chatId, author, text);
+      const created = store.addMessage(chatId, userName, text);
       if (created) {
         broadcast(chatId, { type: 'message', chatId, message: created });
       }
@@ -76,4 +91,10 @@ export async function handleChatRoutes({
   }
 
   return false;
+}
+
+function getBearerToken(req: IncomingMessage): string | null {
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) return null;
+  return header.slice('Bearer '.length).trim();
 }

@@ -32,7 +32,7 @@ export function createApp({ config, store, sessionStore }: AppDependencies) {
 
       const broadcast = _broadcast ?? (() => {});
       if (await handleAuthRoutes({ req, res, url, config, sessionStore })) return;
-      if (await handleChatRoutes({ req, res, url, store, broadcast })) return;
+      if (await handleChatRoutes({ req, res, url, store, sessionStore, broadcast })) return;
 
       sendJson(res, 404, { error: 'not_found' });
     } catch (error) {
