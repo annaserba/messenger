@@ -10,6 +10,7 @@ jobs:
   backend:
     name: Backend (Node.js)
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     defaults:
       run:
         working-directory: apps/api_server
@@ -21,10 +22,8 @@ jobs:
           cache: 'npm'
           cache-dependency-path: apps/api_server/package-lock.json
       - run: npm ci
-      - run: npx tsc --noEmit src/server.ts
-        continue-on-error: true
       - run: node --check src/server.ts
-      - name: Start server & smoke test
+      - name: Smoke test
         run: |
           node src/server.ts &
           SERVER_PID=$!
@@ -36,12 +35,10 @@ jobs:
   flutter:
     name: Flutter
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     defaults:
       run:
         working-directory: apps/flutter_app
-    env:
-      PUB_HOSTED_URL: https://pub.flutter-io.cn
-      FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -50,4 +47,4 @@ jobs:
           channel: 'stable'
       - run: flutter pub get
       - run: flutter analyze
-      - run: flutter test
+      - run: flutter test --platform=chrome
