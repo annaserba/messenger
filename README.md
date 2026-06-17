@@ -38,14 +38,17 @@ export FRONTEND_URL=http://127.0.0.1:8080
 
 Профиль из Яндекс-аккаунта: имя, фамилия, email, аватар. Сессии в Redis (7 дней).
 
-## Production
+## Мониторинг
 
 ```bash
-export DATABASE_URL=postgresql://localhost:5432/messenger  # PostgreSQL
-export REDIS_URL=redis://localhost:6379                     # Redis (опционально)
-export YANDEX_CLIENT_ID=...
-export YANDEX_CLIENT_SECRET=...
-export PHONE_HASH_SALT=...                                  # секретный ключ для хеша телефона
+# Уже работает:
+http://127.0.0.1:3000/metrics   # Prometheus endpoint
+
+# Для дашбордов:
+brew install grafana prometheus
+brew services start grafana prometheus
+# Grafana: http://localhost:3000 (admin/admin)
+# Prometheus: http://localhost:9090
 ```
 
 ## Реализовано
@@ -74,7 +77,7 @@ export PHONE_HASH_SALT=...                                  # секретный
 | Мониторинг | ✅ Prometheus |
 | Файлы | ❌ S3/MinIO |
 
-**Готовность**: 95%. N инстансов, метрики, события.
+**Готовность**: 95%. N инстансов, метрики, события, дашборды.
 
 ## Архитектура
 
