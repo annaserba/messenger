@@ -72,7 +72,7 @@ docker compose up -d
 - [x] Reply, реакции (двойной тап/лонг-пресс, 10 эмодзи, чипы)
 - [x] Socket.IO realtime — комнаты, авто-реконнект, Redis adapter (N инстансов)
 - [x] Push-уведомления (web-push + service worker)
-- [x] Офлайн-режим: кеш, очередь сообщений, авто-синк
+- [x] Офлайн-режим: persistent кеш, очередь с идемпотентностью (exactly-once), авто-синк
 - [x] PostgreSQL + Redis (сессии, кеш, события, realtime)
 - [x] Prometheus-метрики (HTTP, CPU, сообщения) на `/metrics`
 - [x] CI/CD (GitHub Actions) + unit-тесты
