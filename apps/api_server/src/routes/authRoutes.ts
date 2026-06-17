@@ -70,7 +70,7 @@ export async function handleAuthRoutes({
     const existingId = phoneHash ? userStore.findByPhoneHash(phoneHash)?.id : null;
     const userId = existingId ?? 'demo-yandex-user';
 
-    const session = sessionStore.createSession({
+    const session = await sessionStore.createSession({
       id: userId,
       name: existingId ? userStore.getById(userId)!.name : 'Анна',
       email: 'anna@example.com',
@@ -103,7 +103,7 @@ export async function handleAuthRoutes({
 
   if (req.method === 'GET' && url.pathname === '/api/auth/me') {
     const token = getBearerToken(req);
-    const session = token ? sessionStore.findByToken(token) : null;
+    const session = token ? await sessionStore.findByToken(token) : null;
 
     if (!session) {
       sendJson(res, 401, { error: 'unauthorized' });
@@ -190,7 +190,7 @@ async function handleYandexCallback({
     // Use existing user data
     const existing = userStore.getById(existingId);
     if (existing) {
-      const session = sessionStore.createSession({
+      const session = await sessionStore.createSession({
         id: existingId,
         name: existing.name,
         email: existing.email,
@@ -206,7 +206,7 @@ async function handleYandexCallback({
     }
   }
 
-  const session = sessionStore.createSession({
+  const session = await sessionStore.createSession({
     id: userId,
     name,
     email: profile.default_email,

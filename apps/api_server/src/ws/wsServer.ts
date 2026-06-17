@@ -1,6 +1,11 @@
 import { Server as SocketIOServer } from 'socket.io';
+import { createAdapter } from '@socket.io/redis-adapter';
+import Redis from 'ioredis';
 import type { Server as HttpServer } from 'node:http';
-import type { SessionStore } from '../data/inMemorySessionStore.ts';
+import type { SessionStore } from '../data/redisSessionStore.ts';
+
+const pubClient = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379');
+const subClient = pubClient.duplicate();
 
 export type WsContext = {
   broadcast(chatId: string, event: Record<string, unknown>): void;
@@ -11,11 +16,12 @@ export function createWsServer(httpServer: HttpServer, sessionStore: SessionStor
     path: '/ws',
     cors: { origin: '*' },
     transports: ['websocket', 'polling'],
+    adapter: createAdapter(pubClient, subClient),
   });
 
-  io.on('connection', (socket) => {
-    socket.on('auth', (data: { token: string }) => {
-      const session = sessionStore.findByToken(data.token);
+  io.on('connection', async (socket) => {
+    socket.on('auth', async (data: { token: string }) => {
+      const session = await sessionStore.findByToken(data.token);
       if (session) {
         socket.data.userId = session.user.id;
         socket.join(session.user.id);
@@ -25,7 +31,6 @@ export function createWsServer(httpServer: HttpServer, sessionStore: SessionStor
       }
     });
 
-    // Join chat room
     socket.on('join', (chatId: string) => {
       socket.join(chatId);
     });

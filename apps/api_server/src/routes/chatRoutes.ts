@@ -17,7 +17,7 @@ type RouteContext = {
 
 export async function handleChatRoutes({ req, res, url, store, sessionStore, broadcast, pushStore }: RouteContext): Promise<boolean> {
   const token = getBearerToken(req);
-  const session = token ? sessionStore.findByToken(token) : null;
+  const session = token ? await sessionStore.findByToken(token) : null;
   if (!session) { sendJson(res, 401, { error: 'unauthorized' }); return true; }
 
   const userId = session.user.id;

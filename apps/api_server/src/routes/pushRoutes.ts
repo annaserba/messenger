@@ -19,7 +19,7 @@ export async function handlePushRoutes({ req, res, url, sessionStore, pushStore 
 
   if (req.method === 'POST' && url.pathname === '/api/push/subscribe') {
     const token = getBearerToken(req);
-    const session = token ? sessionStore.findByToken(token) : null;
+    const session = token ? await sessionStore.findByToken(token) : null;
     if (!session) { sendJson(res, 401, { error: 'unauthorized' }); return true; }
 
     const body = await readJson(req);
@@ -36,7 +36,7 @@ export async function handlePushRoutes({ req, res, url, sessionStore, pushStore 
 
   if (req.method === 'POST' && url.pathname === '/api/push/unsubscribe') {
     const token = getBearerToken(req);
-    const session = token ? sessionStore.findByToken(token) : null;
+    const session = token ? await sessionStore.findByToken(token) : null;
     if (!session) { sendJson(res, 401, { error: 'unauthorized' }); return true; }
 
     pushStore.unsubscribe(session.user.id);

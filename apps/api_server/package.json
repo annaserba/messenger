@@ -9,7 +9,9 @@
     "check": "/Users/serba/.nvm/versions/node/v25.2.1/bin/node --check src/server.ts"
   },
   "dependencies": {
+    "@socket.io/redis-adapter": "^8.3.0",
     "better-sqlite3": "^12.11.1",
+    "ioredis": "^5.11.1",
     "pg": "^8.21.0",
     "socket.io": "^4.8.3",
     "web-push": "^3.6.7"

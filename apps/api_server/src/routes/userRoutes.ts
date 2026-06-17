@@ -16,7 +16,7 @@ type RouteContext = {
 
 export async function handleUserRoutes({ req, res, url, sessionStore, userStore, store }: RouteContext): Promise<boolean> {
   const token = getBearerToken(req);
-  const session = token ? sessionStore.findByToken(token) : null;
+  const session = token ? await sessionStore.findByToken(token) : null;
   if (!session) { sendJson(res, 401, { error: 'unauthorized' }); return true; }
 
   const myUserId = session.user.id;
