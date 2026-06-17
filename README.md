@@ -51,6 +51,19 @@ brew services start grafana prometheus
 # Prometheus: http://localhost:9090
 ```
 
+## Production (Oracle Cloud Free)
+
+```bash
+# 1. https://signup.cloud.oracle.com → VM 4 ядра/24GB (0₽)
+# 2. Деплой:
+./deploy-to-oracle.sh <IP>
+
+# Локально через Docker:
+cp apps/api_server/.env.example .env
+# заполнить .env
+docker compose up -d
+```
+
 ## Реализовано
 
 - [x] Яндекс OAuth + демо-вход, профиль из аккаунта, сессия в localStorage
