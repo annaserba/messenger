@@ -68,11 +68,28 @@ export PHONE_HASH_SALT=...                                  # секретный
 | БД | ✅ PostgreSQL |
 | Realtime | ✅ Socket.IO + Redis adapter |
 | Сессии | ✅ Redis (7d) |
+| События | ✅ Redis Pub/Sub |
+| Кеш | ✅ Redis |
 | Файлы | ❌ S3/MinIO |
-| События | ❌ NATS |
 | Мониторинг | ❌ Prometheus |
 
-**Готовность**: 80%. Можно поднимать N инстансов.
+**Готовность**: 90%. Можно поднимать N инстансов.
+
+## Архитектура
+
+```
+Flutter ──► Node.js × N (REST + Socket.IO)
+                │
+    ┌───────────┼───────────┐
+    ▼           ▼           ▼
+PostgreSQL    Redis       S3/MinIO
+              ├─ сессии
+              ├─ realtime (Socket.IO adapter)
+              ├─ кеш
+              └─ события (Pub/Sub → push, AI, search)
+```
+
+Поток сообщения: REST POST → PostgreSQL → Socket.IO broadcast + Redis Pub/Sub → push-уведомления (асинхронно, не блокирует ответ).
 
 ## База данных
 
@@ -95,7 +112,7 @@ apps/
 │       ├── domain/      # типы + crypto (sha256 хеширование)
 │       ├── http/        # JSON/CORS helpers
 │       ├── routes/      # auth, chat, push, user
-│       └── ws/          # Socket.IO + push-уведомления
+│       └── ws/          # Socket.IO + event bus (Redis Pub/Sub) + push
 └── flutter_app/    # Flutter-клиент (web + mobile)
     └── lib/
         ├── core/api/         # HTTP-клиент (REST)
