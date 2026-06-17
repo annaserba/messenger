@@ -50,32 +50,29 @@ flutter precache
 
 ## Реализовано
 
-- [x] Яндекс OAuth + демо-вход, профиль (имя, email, аватар), сессия в localStorage/файл
-- [x] Персональные чаты, группы, каналы (создание, иконки, счётчик участников)
-- [x] Поиск пользователей по имени/телефону, старт чата
-- [x] Отправка, редактирование (PATCH), удаление (DELETE) сообщений
-- [x] Reply к сообщениям (replyTo на бэкенде)
-- [x] Реакции: двойной тап 👍, лонг-пресс — 10 эмодзи, чипы со счётчиком
-- [x] Socket.IO realtime (room-ы, авто-реконнект, fallback polling)
+- [x] Яндекс OAuth + демо-вход, профиль из аккаунта, сессия в localStorage
+- [x] Поиск по имени/телефону (хеш, без хранения номера), авто-слияние аккаунтов
+- [x] Персональные чаты, группы, каналы, отправка/редактирование/удаление сообщений
+- [x] Reply, реакции (двойной тап/лонг-пресс, 10 эмодзи, чипы)
+- [x] Socket.IO realtime — комнаты, авто-реконнект, Redis adapter (N инстансов)
 - [x] Push-уведомления (web-push + service worker)
-- [x] Офлайн-режим: кеш в localStorage, очередь сообщений, авто-синк
-- [x] PostgreSQL (persistence) с авто-фолбеком на in-memory (CI)
-- [x] CI/CD (GitHub Actions): backend smoke test, Flutter analyze + unit-тесты
+- [x] Офлайн-режим: кеш, очередь сообщений, авто-синк
+- [x] PostgreSQL + Redis (сессии, 7d TTL)
+- [x] CI/CD (GitHub Actions) + unit-тесты
 - [x] Тёмная тема, Telegram-стиль UI
 
-## Оценка масштабируемости
+## Масштабируемость
 
-| Компонент | Статус | Что дальше |
-|-----------|--------|------------|
-| БД | ✅ PostgreSQL | read replicas, партицирование |
-| Realtime | ✅ Socket.IO | Redis adapter → N инстансов |
-| Сессии | ⚠️ In-memory | Redis / JWT |
-| Файлы | ❌ Нет | S3/MinIO + signed URLs |
-| События | ❌ Нет | NATS JetStream (push, AI, search) |
-| Кеш | ❌ Нет | Redis (горячие данные) |
-| Observability | ❌ Нет | Метрики, трейсинг, алерты |
+| Компонент | Статус |
+|-----------|--------|
+| БД | ✅ PostgreSQL |
+| Realtime | ✅ Socket.IO + Redis adapter |
+| Сессии | ✅ Redis (7d) |
+| Файлы | ❌ S3/MinIO |
+| События | ❌ NATS |
+| Мониторинг | ❌ Prometheus |
 
-**Готовность**: 60%. Можно поднимать второй инстанс уже сейчас (сессии потеряются, но база общая). После Redis → 80%.
+**Готовность**: 80%. Можно поднимать N инстансов.
 
 ## Структура
 
@@ -83,12 +80,11 @@ flutter precache
 apps/
 ├── api_server/     # TypeScript backend (Node 25, Socket.IO, PostgreSQL)
 │   └── src/
-│       ├── config/      # env-конфигурация (Yandex, VAPID, DB)
-│       ├── domain/      # доменные типы (Chat, Message, Reaction)
-│       ├── data/        # pgStore (PostgreSQL) + in-memory fallback
+│       ├── data/        # PostgreSQL + Redis + in-memory fallback
+│       ├── domain/      # типы + крипто (хеширование)
 │       ├── http/        # JSON/CORS helpers
-│       ├── routes/      # auth, chat, push, user routes
-│       └── ws/          # Socket.IO сервер + push-уведомления
+│       ├── routes/      # auth, chat, push, user
+│       └── ws/          # Socket.IO + push-уведомления
 └── flutter_app/    # Flutter-клиент (web + mobile)
     └── lib/
         ├── core/api/         # HTTP-клиент (REST)
