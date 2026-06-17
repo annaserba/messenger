@@ -338,14 +338,6 @@ class _MessengerHomeState extends State<MessengerHome> {
     } catch (_) {}
   }
 
-  void _startReply(Message message) {
-    setState(() => _replyTo = message);
-    _messageFocus.requestFocus();
-  }
-
-  void _cancelReply() {
-    setState(() => _replyTo = null);
-  }
 
   Future<void> _subscribeToPush(String token) async {
     await subscribeToPush(_api.baseUrl, token);
