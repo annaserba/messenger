@@ -161,3 +161,21 @@ export function createInMemoryStore(): ChatStore {
     ensureUserChats,
   };
 }
+
+export function asyncStore(sync: ReturnType<typeof createInMemoryStore>) {
+  return {
+    init: async () => {},
+    listChats: async (userId: string) => sync.listChats(userId),
+    findChat: async (chatId: string) => sync.findChat(chatId),
+    addMessage: async (_chatId: string, _authorId: string, authorName: string, text: string, replyToId?: string) =>
+      sync.addMessage(_chatId, authorName, text, replyToId),
+    editMessage: async (messageId: string, text: string) => sync.editMessage(messageId, text),
+    deleteMessage: async (messageId: string) => sync.deleteMessage(messageId),
+    setReaction: async (messageId: string, userId: string, userName: string, emoji: string) =>
+      sync.setReaction(messageId, userId, userName, emoji),
+    createChat: async (title: string, type: string, createdBy: string, creatorName: string) =>
+      sync.createChat(title, type as Parameters<typeof sync.createChat>[1], createdBy, creatorName),
+    joinChat: async (chatId: string, userId: string, name: string) => sync.joinChat(chatId, userId, name),
+    ensureUserChats: async (userId: string, name: string) => sync.ensureUserChats(userId, name),
+  };
+}
