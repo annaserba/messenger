@@ -425,6 +425,7 @@ class _MessengerHomeState extends State<MessengerHome> {
                             onLogout: _logout,
                             onCreateChat: _showCreateChatDialog,
                             api: _api,
+                            onRefresh: _loadChats,
                           ),
                         ),
                         const VerticalDivider(width: 1),
@@ -457,6 +458,7 @@ class _MessengerHomeState extends State<MessengerHome> {
                             onLogout: _logout,
                             onCreateChat: _showCreateChatDialog,
                             api: _api,
+                            onRefresh: _loadChats,
                             compact: true,
                           ),
                         ),
@@ -504,6 +506,7 @@ class _Sidebar extends StatefulWidget {
     required this.onLogout,
     required this.onCreateChat,
     required this.api,
+    required this.onRefresh,
     this.compact = false,
   });
 
@@ -514,6 +517,7 @@ class _Sidebar extends StatefulWidget {
   final VoidCallback onLogout;
   final VoidCallback onCreateChat;
   final dynamic api;
+  final VoidCallback onRefresh;
   final bool compact;
 
   @override
@@ -522,18 +526,32 @@ class _Sidebar extends StatefulWidget {
 
 class _SidebarState extends State<_Sidebar> {
   final _searchController = TextEditingController();
+  final _searchFocus = FocusNode();
   List<Map<String, dynamic>> _searchResults = [];
   bool _isSearching = false;
+  bool _hasSearched = false;
+  Timer? _debounce;
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _searchController.dispose();
+    _searchFocus.dispose();
     super.dispose();
+  }
+
+  void _onSearchChanged(String query) {
+    _debounce?.cancel();
+    if (query.trim().isEmpty) {
+      setState(() { _searchResults = []; _isSearching = false; _hasSearched = false; });
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 300), () => _search(query.trim()));
   }
 
   Future<void> _search(String query) async {
     if (query.length < 2) {
-      setState(() { _searchResults = []; _isSearching = false; });
+      setState(() { _searchResults = []; _isSearching = false; _hasSearched = false; });
       return;
     }
     setState(() => _isSearching = true);
@@ -541,9 +559,11 @@ class _SidebarState extends State<_Sidebar> {
       final api = widget.api as dynamic;
       final response = await api.searchUsers(query);
       final users = (response['users'] as List<dynamic>?) ?? [];
-      setState(() => _searchResults = users.cast<Map<String, dynamic>>());
+      setState(() { _searchResults = users.cast<Map<String, dynamic>>(); _hasSearched = true; });
     } catch (_) {
       setState(() => _searchResults = []);
+    } finally {
+      setState(() => _isSearching = false);
     }
   }
 
@@ -551,18 +571,24 @@ class _SidebarState extends State<_Sidebar> {
     try {
       final api = widget.api as dynamic;
       await api.startChat(userId);
-      _searchController.clear();
-      setState(() { _searchResults = []; _isSearching = false; });
-      // Trigger chat list refresh via parent
-      widget.onCreateChat; // placeholder — need callback
+      _clearSearch();
+      widget.onRefresh();
     } catch (_) {}
+  }
+
+  void _clearSearch() {
+    _searchController.clear();
+    _searchFocus.unfocus();
+    setState(() { _searchResults = []; _isSearching = false; _hasSearched = false; });
   }
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final chats = widget.chats;
     final user = widget.user;
+    final showResults = _searchController.text.trim().isNotEmpty;
 
     return Material(
       color: colors.surface,
@@ -571,6 +597,7 @@ class _SidebarState extends State<_Sidebar> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Profile row
             Row(
               children: [
                 _UserAvatar(avatarUrl: user?.avatarUrl, name: user?.name ?? ''),
@@ -590,54 +617,97 @@ class _SidebarState extends State<_Sidebar> {
                   ),
                 ),
                 const SizedBox(width: 4),
-                IconButton(tooltip: 'Выйти', onPressed: widget.onLogout, icon: Icon(Icons.logout, color: colors.error)),
+                IconButton(tooltip: 'Выйти', onPressed: widget.onLogout, icon: Icon(Icons.logout_rounded, color: colors.error)),
               ],
             ),
 
-            // Search bar
             const SizedBox(height: 12),
+
+            // Search
             TextField(
               controller: _searchController,
-              onChanged: _search,
+              focusNode: _searchFocus,
+              onChanged: _onSearchChanged,
               decoration: InputDecoration(
                 hintText: 'Поиск по имени или телефону',
-                prefixIcon: const Icon(Icons.search, size: 20),
-                suffixIcon: _isSearching ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : null,
+                prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        onPressed: _clearSearch,
+                        splashRadius: 18,
+                      )
+                    : null,
+                filled: true,
+                fillColor: isDark ? colors.surfaceContainerHighest : colors.surfaceContainerHighest.withOpacity(0.5),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
                 isDense: true,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               ),
             ),
 
-            // Search results
-            if (_searchResults.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              ...(_searchResults.map((u) => ListTile(
-                dense: true,
-                leading: CircleAvatar(
-                  radius: 16,
-                  backgroundImage: u['avatarUrl'] != null ? NetworkImage(u['avatarUrl'] as String) : null,
-                  child: u['avatarUrl'] == null ? Text((u['firstName'] as String? ?? u['name'] as String? ?? '?').substring(0, 1).toUpperCase()) : null,
+            // Search state
+            if (showResults) ...[
+              const SizedBox(height: 12),
+              if (_isSearching)
+                const Center(child: Padding(padding: EdgeInsets.all(16), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))))
+              else if (_hasSearched && _searchResults.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text('Никого не найдено', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 14)),
+                )
+              else if (_searchResults.isNotEmpty) ...[
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: _searchResults.length,
+                    separatorBuilder: (_, __) => Divider(height: 1, indent: 56, color: colors.outlineVariant.withOpacity(0.3)),
+                    itemBuilder: (ctx, i) {
+                      final u = _searchResults[i];
+                      final name = u['firstName'] as String? ?? u['name'] as String? ?? '';
+                      final phone = u['phone'] as String?;
+                      final avatarUrl = u['avatarUrl'] as String?;
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                        leading: CircleAvatar(
+                          radius: 20,
+                          backgroundColor: colors.primaryContainer,
+                          backgroundImage: avatarUrl != null && avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+                          child: avatarUrl == null || avatarUrl.isEmpty
+                              ? Text(name.isNotEmpty ? name[0].toUpperCase() : '?', style: TextStyle(color: colors.onPrimaryContainer, fontWeight: FontWeight.w600))
+                              : null,
+                        ),
+                        title: Text(name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                        subtitle: phone != null ? Text(phone, style: TextStyle(fontSize: 13, color: colors.onSurfaceVariant)) : null,
+                        trailing: FilledButton.tonalIcon(
+                          icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
+                          label: const Text('Написать'),
+                          style: FilledButton.styleFrom(visualDensity: VisualDensity.compact),
+                          onPressed: () => _startChat(u['id'] as String),
+                        ),
+                      );
+                    },
+                  ),
                 ),
-                title: Text(u['firstName'] as String? ?? u['name'] as String? ?? '', style: const TextStyle(fontSize: 14)),
-                subtitle: u['phone'] != null ? Text(u['phone'] as String, style: const TextStyle(fontSize: 12)) : null,
-                trailing: IconButton.filledTonal(
-                  icon: const Icon(Icons.chat_bubble_outline, size: 18),
-                  onPressed: () => _startChat(u['id'] as String),
-                ),
-              ))),
-              const Divider(),
+              ],
+              if (!_isSearching && _searchResults.isNotEmpty) Divider(height: 24, color: colors.outlineVariant.withOpacity(0.3)),
             ],
 
             // Chat header
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Expanded(child: Text('Чаты', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700))),
-                IconButton.filledTonal(tooltip: 'Создать чат', onPressed: widget.onCreateChat, icon: const Icon(Icons.add, size: 20), visualDensity: VisualDensity.compact),
-              ],
-            ),
-            const SizedBox(height: 8),
+            if (!showResults || _isSearching || (_hasSearched && _searchResults.isEmpty)) ...[
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Expanded(child: Text('Чаты', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700))),
+                  IconButton.filledTonal(tooltip: 'Создать чат', onPressed: widget.onCreateChat, icon: const Icon(Icons.add_rounded, size: 20), visualDensity: VisualDensity.compact),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
+
             Expanded(
               child: ListView.separated(
                 scrollDirection: widget.compact ? Axis.horizontal : Axis.vertical,
