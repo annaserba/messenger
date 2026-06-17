@@ -1,23 +1,37 @@
 import { Server as SocketIOServer } from 'socket.io';
-import { createAdapter } from '@socket.io/redis-adapter';
-import Redis from 'ioredis';
 import type { Server as HttpServer } from 'node:http';
 import type { SessionStore } from '../data/redisSessionStore.ts';
-
-const pubClient = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379');
-const subClient = pubClient.duplicate();
 
 export type WsContext = {
   broadcast(chatId: string, event: Record<string, unknown>): void;
 };
 
+let redisAdapter: ReturnType<typeof import('@socket.io/redis-adapter').createAdapter> | undefined;
+
+async function tryRedisAdapter() {
+  try {
+    const Redis = (await import('ioredis')).default;
+    const { createAdapter } = await import('@socket.io/redis-adapter');
+    const url = process.env.REDIS_URL ?? 'redis://localhost:6379';
+    const pub = new Redis(url, { lazyConnect: true, maxRetriesPerRequest: 1, retryStrategy: () => null });
+    const sub = pub.duplicate();
+    await Promise.all([pub.connect(), sub.connect()]);
+    redisAdapter = createAdapter(pub, sub);
+    console.log('WS: Redis adapter enabled');
+  } catch {
+    console.log('WS: in-memory adapter (Redis unavailable)');
+  }
+}
+
 export function createWsServer(httpServer: HttpServer, sessionStore: SessionStore): WsContext {
-  const io = new SocketIOServer(httpServer, {
+  const opts: Parameters<typeof SocketIOServer>[1] = {
     path: '/ws',
     cors: { origin: '*' },
     transports: ['websocket', 'polling'],
-    adapter: createAdapter(pubClient, subClient),
-  });
+  };
+  if (redisAdapter) opts.adapter = redisAdapter;
+
+  const io = new SocketIOServer(httpServer, opts);
 
   io.on('connection', async (socket) => {
     socket.on('auth', async (data: { token: string }) => {
@@ -30,10 +44,7 @@ export function createWsServer(httpServer: HttpServer, sessionStore: SessionStor
         socket.emit('auth_error', { message: 'invalid token' });
       }
     });
-
-    socket.on('join', (chatId: string) => {
-      socket.join(chatId);
-    });
+    socket.on('join', (chatId: string) => socket.join(chatId));
   });
 
   return {
@@ -42,3 +53,6 @@ export function createWsServer(httpServer: HttpServer, sessionStore: SessionStor
     },
   };
 }
+
+// Init Redis adapter (non-blocking)
+tryRedisAdapter();
