@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/offline/offline_cache.dart';
 import '../../core/storage/session_storage.dart';
 import '../../core/ws/ws_client.dart';
 import '../../models/chat.dart';
@@ -31,19 +33,24 @@ class _MessengerHomeState extends State<MessengerHome> {
   bool _isTyping = false;
   bool _isSignedIn = false;
   bool _isLoading = false;
+  bool _isOnline = true;
   String? _error;
   late final WsClient _ws;
+  final List<Map<String, dynamic>> _offlineQueue = [];
+  StreamSubscription? _onlineSub;
 
   @override
   void initState() {
     super.initState();
     _ws = WsClient(baseUrl: _api.baseUrl);
     _consumeAuthRedirect();
+    _initOffline();
   }
 
   @override
   void dispose() {
     _ws.disconnect();
+    _onlineSub?.cancel();
     _messageController.dispose();
     _messageFocus.dispose();
     super.dispose();
@@ -181,17 +188,21 @@ class _MessengerHomeState extends State<MessengerHome> {
   }
 
   Future<void> _loadChats() async {
-    final response = await _api.fetchChats();
-    final nextChats = (response['chats'] as List<dynamic>)
-        .map((item) => Chat.fromJson(item as Map<String, dynamic>, _userName))
-        .toList();
+    try {
+      final response = await _api.fetchChats();
+      final nextChats = (response['chats'] as List<dynamic>)
+          .map((item) => Chat.fromJson(item as Map<String, dynamic>, _userName))
+          .toList();
 
+      if (!mounted) return;
+      setState(() => _chats = nextChats);
+      _cacheChats();
+    } catch (_) {
+      if (_user != null) _loadCachedChats(_user!.id);
+    }
     if (!mounted) return;
     setState(() {
-      _chats = nextChats;
-      if (_selectedChatIndex >= _chats.length) {
-        _selectedChatIndex = 0;
-      }
+      if (_selectedChatIndex >= _chats.length) _selectedChatIndex = 0;
     });
   }
 
@@ -206,6 +217,61 @@ class _MessengerHomeState extends State<MessengerHome> {
     if (type == 'message' || type == 'reaction') {
       _loadChats();
     }
+  }
+
+  void _initOffline() {
+    _updateOnlineStatus();
+    try {
+      _onlineSub = Stream.periodic(const Duration(seconds: 5)).listen((_) {
+        _updateOnlineStatus();
+      });
+    } catch (_) {}
+  }
+
+  void _updateOnlineStatus() {
+    final wasOnline = _isOnline;
+    _isOnline = isOnline;
+    if (_isOnline && !wasOnline && _isSignedIn) {
+      _syncOfflineQueue();
+    }
+    if (mounted) setState(() {});
+  }
+
+  void _loadCachedChats(String userId) {
+    final raw = loadCached('chats_$userId');
+    if (raw == null) return;
+    try {
+      final list = jsonDecode(raw) as List<dynamic>;
+      final cached = list
+          .map((item) => Chat.fromJson(item as Map<String, dynamic>, _userName))
+          .toList();
+      if (_chats.isEmpty) {
+        setState(() => _chats = cached);
+      }
+    } catch (_) {}
+  }
+
+  void _cacheChats() {
+    if (_user == null) return;
+    final json = _chats.map((c) => c.toJson()).toList();
+    cacheData('chats_${_user!.id}', json);
+  }
+
+  Future<void> _syncOfflineQueue() async {
+    if (_offlineQueue.isEmpty) return;
+    final queue = List<Map<String, dynamic>>.from(_offlineQueue);
+    _offlineQueue.clear();
+    for (final msg in queue) {
+      try {
+        await _api.sendMessage(
+          chatId: msg['chatId'] as String,
+          text: msg['text'] as String,
+        );
+      } catch (_) {
+        _offlineQueue.add(msg);
+      }
+    }
+    if (mounted && queue.isNotEmpty) await _loadChats();
   }
 
   void _selectChat(int index) {
@@ -228,14 +294,31 @@ class _MessengerHomeState extends State<MessengerHome> {
       _replyTo = null;
     });
 
+    if (!_isOnline) {
+      _offlineQueue.add({'chatId': chat.id, 'text': text});
+      // Show optimistic message
+      final optimistic = Message(
+        id: 'local-${DateTime.now().millisecondsSinceEpoch}',
+        author: _userName,
+        text: text,
+        sentAt: DateTime.now(),
+        isMine: true,
+      );
+      setState(() {
+        chat.messages.add(optimistic);
+        _chats = List.from(_chats);
+      });
+      _messageFocus.requestFocus();
+      return;
+    }
+
     try {
       await _api.sendMessage(chatId: chat.id, text: text, replyTo: replyTo?.id);
       await _loadChats();
     } catch (_) {
+      _offlineQueue.add({'chatId': chat.id, 'text': text});
       if (!mounted) return;
-      setState(() {
-        _error = 'Сообщение не отправлено. Backend недоступен.';
-      });
+      setState(() => _error = 'Сообщение не отправлено. Будет отправлено при подключении.');
     }
     _messageFocus.requestFocus();
   }
@@ -401,6 +484,15 @@ class _MessengerHomeState extends State<MessengerHome> {
       body: SafeArea(
         child: Column(
           children: [
+            if (!_isOnline)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                color: Colors.orange.shade700,
+                child: const Text('Нет соединения. Сообщения отправятся при подключении.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white, fontSize: 12)),
+              ),
             if (_error != null)
               MaterialBanner(
                 content: Text(_error!),
