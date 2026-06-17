@@ -26,7 +26,7 @@ export async function handleUserRoutes({ req, res, url, sessionStore, userStore,
     if (q.length < 2) { sendJson(res, 200, { users: [] }); return true; }
     const results = userStore.search(q).filter((u) => u.id !== myUserId);
     sendJson(res, 200, { users: results.map((u) => ({
-      id: u.id, name: u.name, firstName: u.firstName, lastName: u.lastName, avatarUrl: u.avatarUrl, phone: u.phone,
+      id: u.id, name: u.name, firstName: u.firstName, lastName: u.lastName, avatarUrl: u.avatarUrl,
     })) });
     return true;
   }

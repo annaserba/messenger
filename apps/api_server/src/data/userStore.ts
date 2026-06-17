@@ -27,8 +27,7 @@ export function createInMemoryUserStore(): UserStore {
       return [...users.values()].filter((u) =>
         u.name.toLowerCase().includes(q) ||
         u.firstName?.toLowerCase().includes(q) ||
-        u.lastName?.toLowerCase().includes(q) ||
-        u.phone?.includes(q)
+        u.lastName?.toLowerCase().includes(q)
       );
     },
     getById(id: string) {

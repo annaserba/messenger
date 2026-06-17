@@ -715,7 +715,7 @@ class _SidebarState extends State<_Sidebar> {
               focusNode: _searchFocus,
               onChanged: _onSearchChanged,
               decoration: InputDecoration(
-                hintText: 'Поиск по имени или телефону',
+                hintText: 'Поиск по имени',
                 prefixIcon: const Icon(Icons.search_rounded, size: 20),
                 suffixIcon: _searchController.text.isNotEmpty
                     ? IconButton(
@@ -754,7 +754,6 @@ class _SidebarState extends State<_Sidebar> {
                     itemBuilder: (ctx, i) {
                       final u = _searchResults[i];
                       final name = u['firstName'] as String? ?? u['name'] as String? ?? '';
-                      final phone = u['phone'] as String?;
                       final avatarUrl = u['avatarUrl'] as String?;
                       return ListTile(
                         contentPadding: const EdgeInsets.symmetric(horizontal: 4),
@@ -767,7 +766,6 @@ class _SidebarState extends State<_Sidebar> {
                               : null,
                         ),
                         title: Text(name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-                        subtitle: phone != null ? Text(phone, style: TextStyle(fontSize: 13, color: colors.onSurfaceVariant)) : null,
                         trailing: FilledButton.tonalIcon(
                           icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
                           label: const Text('Написать'),
