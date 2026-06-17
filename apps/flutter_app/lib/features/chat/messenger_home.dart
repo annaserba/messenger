@@ -279,6 +279,8 @@ class _MessengerHomeState extends State<MessengerHome> {
       _selectedChatIndex = index;
       _isTyping = false;
     });
+    final chat = _chats.isNotEmpty && index < _chats.length ? _chats[index] : null;
+    if (chat != null) _ws.joinChat(chat.id);
     _messageFocus.requestFocus();
   }
 
