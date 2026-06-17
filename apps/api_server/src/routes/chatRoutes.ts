@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { SessionStore } from '../data/inMemorySessionStore.ts';
-import type { ChatStore } from '../data/inMemoryStore.ts';
+import type { ChatStore } from '../data/pgStore.ts';
 import type { PushStore } from '../ws/pushStore.ts';
 import type { ChatType } from '../domain/message.ts';
 import { readJson, sendJson } from '../http/json.ts';
@@ -22,10 +22,10 @@ export async function handleChatRoutes({ req, res, url, store, sessionStore, bro
 
   const userId = session.user.id;
   const userName = session.user.firstName ?? session.user.name;
-  store.ensureUserChats(userId, userName);
+  await store.ensureUserChats(userId, userName);
 
   if (req.method === 'GET' && url.pathname === '/api/chats') {
-    sendJson(res, 200, { chats: store.listChats(userId) });
+    sendJson(res, 200, { chats: await store.listChats(userId) });
     return true;
   }
 
@@ -35,14 +35,16 @@ export async function handleChatRoutes({ req, res, url, store, sessionStore, bro
     const type = (String(body.type ?? 'group').trim()) as ChatType;
     if (!title) { sendJson(res, 400, { error: 'title_required' }); return true; }
     if (!['group', 'channel'].includes(type)) { sendJson(res, 400, { error: 'type_must_be_group_or_channel' }); return true; }
-    store.createChat(title, type, userId, userName);
-    sendJson(res, 201, { chat: store.listChats(userId).at(-1) });
+    await store.createChat(title, type, userId, userName);
+    const chats = await store.listChats(userId);
+    const created = chats.at(-1);
+    sendJson(res, 201, { chat: created });
     return true;
   }
 
   const joinMatch = url.pathname.match(/^\/api\/chats\/([^/]+)\/join$/);
   if (req.method === 'POST' && joinMatch) {
-    store.joinChat(joinMatch[1] ?? '', userId, userName);
+    await store.joinChat(joinMatch[1] ?? '', userId, userName);
     sendJson(res, 200, { ok: true });
     return true;
   }
@@ -50,11 +52,13 @@ export async function handleChatRoutes({ req, res, url, store, sessionStore, bro
   const messageMatch = url.pathname.match(/^\/api\/chats\/([^/]+)\/messages$/);
   if (messageMatch) {
     const chatId = messageMatch[1] ?? '';
-    const chat = store.findChat(chatId);
+    const chat = await store.findChat(chatId);
     if (!chat) { sendJson(res, 404, { error: 'chat_not_found' }); return true; }
 
     if (req.method === 'GET') {
-      sendJson(res, 200, { messages: chat.messages });
+      const chats = await store.listChats(userId);
+      const full = chats.find((c) => c.id === chatId);
+      sendJson(res, 200, { messages: full?.messages ?? [] });
       return true;
     }
 
@@ -64,15 +68,19 @@ export async function handleChatRoutes({ req, res, url, store, sessionStore, bro
       const replyTo = String(body.replyTo ?? '').trim() || undefined;
       if (!text) { sendJson(res, 400, { error: 'text_required' }); return true; }
 
-      const created = store.addMessage(chatId, userName, text, replyTo);
+      const created = await store.addMessage(chatId, userId, userName, text, replyTo);
       if (created) {
         broadcast(chatId, { type: 'message', chatId, message: created });
-        for (const p of chat.participants) {
-          if (p.userId !== userId) {
-            pushStore.send(p.userId, {
-              title: chat.type === 'personal' ? userName : chat.title,
-              body: text, icon: '/favicon.png', data: { chatId },
-            });
+        const chats = await store.listChats(userId);
+        const full = chats.find((c) => c.id === chatId);
+        if (full) {
+          for (const p of full.participants) {
+            if (p.userId !== userId) {
+              pushStore.send(p.userId, {
+                title: chat.type === 'personal' ? userName : chat.title,
+                body: text, icon: '/favicon.png', data: { chatId },
+              });
+            }
           }
         }
       }
@@ -84,14 +92,14 @@ export async function handleChatRoutes({ req, res, url, store, sessionStore, bro
       const body = await readJson(req);
       const text = String(body.text ?? '').trim();
       if (!text) { sendJson(res, 400, { error: 'text_required' }); return true; }
-      const updated = store.editMessage(messageMatch[1] ?? '', text);
+      const updated = await store.editMessage(messageMatch[1] ?? '', text);
       if (updated) broadcast(chatId, { type: 'message_edited', chatId, message: updated });
       sendJson(res, 200, { message: updated });
       return true;
     }
 
     if (req.method === 'DELETE') {
-      const deleted = store.deleteMessage(messageMatch[1] ?? '');
+      const deleted = await store.deleteMessage(messageMatch[1] ?? '');
       if (deleted) broadcast(chatId, { type: 'message_deleted', chatId, message: { id: messageMatch[1] } });
       sendJson(res, 200, { ok: deleted });
       return true;
@@ -102,10 +110,15 @@ export async function handleChatRoutes({ req, res, url, store, sessionStore, bro
   if (req.method === 'POST' && reactionMatch) {
     const body = await readJson(req);
     const reaction = String(body.reaction ?? '').trim();
-    const target = store.setReaction(reactionMatch[1] ?? '', userId, userName, reaction);
+    const target = await store.setReaction(reactionMatch[1] ?? '', userId, userName, reaction);
     if (!target) { sendJson(res, 404, { error: 'message_not_found' }); return true; }
-    const c = store.findChatByMessage(reactionMatch[1] ?? '');
-    if (c) broadcast(c.id, { type: 'reaction', chatId: c.id, message: target });
+    const chats = await store.listChats(userId);
+    for (const c of chats) {
+      if (c.messages.some((m) => m.id === reactionMatch[1])) {
+        broadcast(c.id, { type: 'reaction', chatId: c.id, message: target });
+        break;
+      }
+    }
     sendJson(res, 200, { message: target });
     return true;
   }

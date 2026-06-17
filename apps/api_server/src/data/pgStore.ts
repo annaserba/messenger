@@ -13,7 +13,8 @@ type ChatRow = {
 type MessageRow = {
   id: string;
   chat_id: string;
-  author: string;
+  author_id: string;
+  author_name: string;
   text: string;
   sent_at: string;
   reply_to_id: string | null;
@@ -46,42 +47,37 @@ export type ChatStore = {
   init(): Promise<void>;
   listChats(userId: string): Promise<PublicChat[]>;
   findChat(chatId: string): Promise<ChatRow | undefined>;
-  addMessage(chatId: string, author: string, text: string, replyToId?: string): Promise<Message | null>;
+  addMessage(chatId: string, authorId: string, authorName: string, text: string, replyToId?: string): Promise<Message | null>;
   editMessage(messageId: string, text: string): Promise<Message | null>;
   deleteMessage(messageId: string): Promise<boolean>;
   setReaction(messageId: string, userId: string, userName: string, emoji: string): Promise<Message | null>;
   createChat(title: string, type: ChatType, createdBy: string, creatorName: string): Promise<ChatRow>;
   joinChat(chatId: string, userId: string, name: string): Promise<ChatRow | null>;
-  ensureUserChats(userId: string, name: string, email?: string, avatarUrl?: string, firstName?: string, lastName?: string): Promise<void>;
+  ensureUserChats(userId: string, name: string): Promise<void>;
 };
 
-function pgPool() {
-  const { Pool } = require('pg') as typeof import('pg');
-  return new Pool({
-    connectionString: process.env.DATABASE_URL ?? 'postgresql://localhost:5432/messenger',
-  });
-}
+let _pool: import('pg').Pool | null = null;
 
-async function query(text: string, params?: unknown[]) {
-  const pool = pgPool();
-  try {
-    return await pool.query(text, params);
-  } finally {
-    await pool.end();
+async function getPool() {
+  if (!_pool) {
+    const pg = await import('pg');
+    _pool = new pg.default.Pool({
+      connectionString: process.env.DATABASE_URL ?? 'postgresql://localhost:5432/messenger',
+    });
   }
+  return _pool;
 }
 
 export function createPgStore(): ChatStore {
+  async function query(text: string, params?: unknown[]) {
+    const pool = await getPool();
+    return pool.query(text, params);
+  }
+
   async function init() {
     await query(`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        email TEXT,
-        avatar_url TEXT,
-        first_name TEXT,
-        last_name TEXT,
-        provider TEXT NOT NULL DEFAULT 'yandex',
         created_at TIMESTAMPTZ DEFAULT now()
       );
 
@@ -97,6 +93,7 @@ export function createPgStore(): ChatStore {
       CREATE TABLE IF NOT EXISTS chat_participants (
         chat_id TEXT REFERENCES chats(id) ON DELETE CASCADE,
         user_id TEXT REFERENCES users(id),
+        name TEXT NOT NULL DEFAULT '',
         role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('admin','member')),
         joined_at TIMESTAMPTZ DEFAULT now(),
         PRIMARY KEY (chat_id, user_id)
@@ -105,7 +102,8 @@ export function createPgStore(): ChatStore {
       CREATE TABLE IF NOT EXISTS messages (
         id TEXT PRIMARY KEY,
         chat_id TEXT REFERENCES chats(id) ON DELETE CASCADE,
-        author TEXT NOT NULL,
+        author_id TEXT NOT NULL,
+        author_name TEXT NOT NULL,
         text TEXT NOT NULL,
         sent_at TIMESTAMPTZ DEFAULT now(),
         reply_to_id TEXT,
@@ -126,20 +124,14 @@ export function createPgStore(): ChatStore {
     `);
   }
 
-  async function ensureUserChats(userId: string, name: string, email?: string, avatarUrl?: string, firstName?: string, lastName?: string) {
-    await query(
-      `INSERT INTO users (id, name, email, avatar_url, first_name, last_name, provider)
-       VALUES ($1,$2,$3,$4,$5,$6,'yandex')
-       ON CONFLICT(id) DO UPDATE SET name=$2, email=COALESCE($3,users.email),
-         avatar_url=COALESCE($4,users.avatar_url), first_name=COALESCE($5,users.first_name), last_name=COALESCE($6,users.last_name)`,
-      [userId, name, email ?? null, avatarUrl ?? null, firstName ?? null, lastName ?? null],
-    );
+  async function ensureUserChats(userId: string, name: string) {
+    await query('INSERT INTO users (id) VALUES ($1) ON CONFLICT DO NOTHING', [userId]);
     const existing = await query('SELECT id FROM chats WHERE id = $1', [userId]);
     if (existing.rows.length === 0) {
       await query('INSERT INTO chats (id, title, type, created_by, avatar_label) VALUES ($1,$2,$3,$4,$5)',
         [userId, name, 'personal', userId, name.substring(0, 1).toUpperCase()]);
-      await query('INSERT INTO chat_participants (chat_id, user_id, role) VALUES ($1,$2,$3)',
-        [userId, userId, 'admin']);
+      await query('INSERT INTO chat_participants (chat_id, user_id, name, role) VALUES ($1,$2,$3,$4)',
+        [userId, userId, name, 'admin']);
     }
   }
 
@@ -154,7 +146,7 @@ export function createPgStore(): ChatStore {
       }));
       result.push({
         id: row.id,
-        author: row.author,
+        author: row.author_name,
         text: row.text,
         sentAt: row.sent_at,
         reactions,
@@ -164,10 +156,10 @@ export function createPgStore(): ChatStore {
     return result;
   }
 
-  async function chatToPublic(chat: ChatRow, userId: string): Promise<PublicChat> {
-    const p = await query('SELECT user_id, role, joined_at FROM chat_participants WHERE chat_id = $1', [chat.id]);
-    const participants = p.rows.map((r: { user_id: string; role: string; joined_at: string }) => ({
-      userId: r.user_id, name: '', role: r.role, joinedAt: r.joined_at,
+  async function chatToPublic(chat: ChatRow): Promise<PublicChat> {
+    const p = await query('SELECT user_id, name, role, joined_at FROM chat_participants WHERE chat_id = $1', [chat.id]);
+    const participants = p.rows.map((r: { user_id: string; name: string; role: string; joined_at: string }) => ({
+      userId: r.user_id, name: r.name, role: r.role, joinedAt: r.joined_at,
     }));
     const m = await query("SELECT * FROM messages WHERE chat_id = $1 AND deleted = false ORDER BY sent_at", [chat.id]);
     const messages = await rowsToMessages(m.rows as MessageRow[]);
@@ -189,7 +181,7 @@ export function createPgStore(): ChatStore {
          WHERE cp.user_id = $1`, [userId]);
       const result: PublicChat[] = [];
       for (const row of r.rows as ChatRow[]) {
-        result.push(await chatToPublic(row, userId));
+        result.push(await chatToPublic(row));
       }
       return result;
     },
@@ -199,20 +191,20 @@ export function createPgStore(): ChatStore {
       return r.rows[0] as ChatRow | undefined;
     },
 
-    async addMessage(chatId: string, author: string, text: string, replyToId?: string) {
+    async addMessage(chatId: string, authorId: string, authorName: string, text: string, replyToId?: string) {
       const id = randomUUID();
       let replyToAuthor = null;
       let replyToText = null;
       if (replyToId) {
-        const r = await query('SELECT author, text FROM messages WHERE id = $1', [replyToId]);
+        const r = await query('SELECT author_name, text FROM messages WHERE id = $1', [replyToId]);
         if (r.rows.length > 0) {
-          replyToAuthor = r.rows[0].author;
+          replyToAuthor = r.rows[0].author_name;
           replyToText = r.rows[0].text;
         }
       }
       await query(
-        'INSERT INTO messages (id, chat_id, author, text, reply_to_id, reply_to_author, reply_to_text) VALUES ($1,$2,$3,$4,$5,$6,$7)',
-        [id, chatId, author, text, replyToId ?? null, replyToAuthor, replyToText]);
+        'INSERT INTO messages (id, chat_id, author_id, author_name, text, reply_to_id, reply_to_author, reply_to_text) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+        [id, chatId, authorId, authorName, text, replyToId ?? null, replyToAuthor, replyToText]);
       return (await query('SELECT * FROM messages WHERE id = $1', [id])).rows[0] as unknown as Message;
     },
 
@@ -239,19 +231,21 @@ export function createPgStore(): ChatStore {
       return (await query('SELECT * FROM messages WHERE id = $1', [messageId])).rows[0] as unknown as Message;
     },
 
-    async createChat(title: string, type: ChatType, createdBy: string, _creatorName: string) {
+    async createChat(title: string, type: ChatType, createdBy: string, creatorName: string) {
       const id = randomUUID();
+      await query('INSERT INTO users (id) VALUES ($1) ON CONFLICT DO NOTHING', [createdBy]);
       const avatarLabel = title.substring(0, 1).toUpperCase();
       await query('INSERT INTO chats (id, title, type, created_by, avatar_label) VALUES ($1,$2,$3,$4,$5)',
         [id, title, type, createdBy, avatarLabel]);
-      await query('INSERT INTO chat_participants (chat_id, user_id, role) VALUES ($1,$2,$3)',
-        [id, createdBy, 'admin']);
+      await query('INSERT INTO chat_participants (chat_id, user_id, name, role) VALUES ($1,$2,$3,$4)',
+        [id, createdBy, creatorName, 'admin']);
       return (await query('SELECT * FROM chats WHERE id = $1', [id])).rows[0] as ChatRow;
     },
 
-    async joinChat(chatId: string, userId: string, _name: string) {
-      await query('INSERT INTO chat_participants (chat_id, user_id, role) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',
-        [chatId, userId, 'member']);
+    async joinChat(chatId: string, userId: string, name: string) {
+      await query('INSERT INTO users (id) VALUES ($1) ON CONFLICT DO NOTHING', [userId]);
+      await query('INSERT INTO chat_participants (chat_id, user_id, name, role) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING',
+        [chatId, userId, name, 'member']);
       return (await query('SELECT * FROM chats WHERE id = $1', [chatId])).rows[0] as ChatRow | null;
     },
 

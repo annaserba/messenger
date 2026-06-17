@@ -6,7 +6,7 @@ import { handlePushRoutes } from './routes/pushRoutes.ts';
 import { handleUserRoutes } from './routes/userRoutes.ts';
 import { sendJson } from './http/json.ts';
 import type { AppConfig } from './config/env.ts';
-import type { ChatStore } from './data/inMemoryStore.ts';
+import type { ChatStore } from './data/pgStore.ts';
 import type { SessionStore } from './data/inMemorySessionStore.ts';
 import type { PushStore } from './ws/pushStore.ts';
 import type { UserStore } from './data/userStore.ts';

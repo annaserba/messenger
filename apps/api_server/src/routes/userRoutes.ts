@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { SessionStore } from '../data/inMemorySessionStore.ts';
 import type { UserStore } from '../data/userStore.ts';
-import type { ChatStore } from '../data/inMemoryStore.ts';
+import type { ChatStore } from '../data/pgStore.ts';
 import { sendJson } from '../http/json.ts';
 
 type RouteContext = {
@@ -44,11 +44,12 @@ export async function handleUserRoutes({ req, res, url, sessionStore, userStore,
     const targetName = target.firstName ?? target.name;
 
     const chatId = [myUserId, targetId].sort().join(':');
-    let chat = store.findChat(chatId);
+    let chat = await store.findChat(chatId);
     if (!chat) {
-      chat = store.createChat(chatId, targetName, 'personal', myUserId, myName);
-      store.joinChat(chatId, targetId, targetName);
-      store.joinChat(chatId, myUserId, myName);
+      await store.createChat(chatId, targetName, 'personal', myUserId, myName);
+      await store.joinChat(chatId, targetId, targetName);
+      await store.joinChat(chatId, myUserId, myName);
+      chat = await store.findChat(chatId);
     }
 
     sendJson(res, 200, { chatId, chat: { id: chat.id, title: chat.title } });

@@ -1,21 +1,29 @@
 import { createApp } from './app.ts';
 import { config } from './config/env.ts';
-import { createInMemoryStore } from './data/inMemoryStore.ts';
+import { createPgStore } from './data/pgStore.ts';
 import { createInMemorySessionStore } from './data/inMemorySessionStore.ts';
-import { createInMemoryUserStore } from './data/userStore.ts';
 import { createWsServer } from './ws/wsServer.ts';
 import { createPushStore } from './ws/pushStore.ts';
+import { createInMemoryUserStore } from './data/userStore.ts';
 
-const store = createInMemoryStore();
+const store = createPgStore();
 const sessionStore = createInMemorySessionStore();
 const userStore = createInMemoryUserStore();
 const pushStore = createPushStore(config);
-const app = createApp({ config, store, sessionStore, pushStore, userStore });
 
-const ws = createWsServer(app.server, sessionStore);
-app.setBroadcast((chatId, event) => ws.broadcast(chatId, event as Parameters<typeof ws.broadcast>[1]));
+async function main() {
+  await store.init();
+  const app = createApp({ config, store, sessionStore, pushStore, userStore });
+  const ws = createWsServer(app.server, sessionStore);
+  app.setBroadcast((chatId, event) => ws.broadcast(chatId, event as Parameters<typeof ws.broadcast>[1]));
 
-app.server.listen(config.port, '127.0.0.1', () => {
-  console.log(`Messenger API listening on http://127.0.0.1:${config.port}`);
-  console.log(`WebSocket available at ws://127.0.0.1:${config.port}/ws`);
+  app.server.listen(config.port, '127.0.0.1', () => {
+    console.log(`Messenger API on http://127.0.0.1:${config.port} (PostgreSQL)`);
+    console.log(`WebSocket on ws://127.0.0.1:${config.port}/ws`);
+  });
+}
+
+main().catch((err) => {
+  console.error('Failed to start:', err);
+  process.exit(1);
 });
