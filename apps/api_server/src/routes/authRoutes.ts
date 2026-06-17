@@ -66,13 +66,11 @@ export async function handleAuthRoutes({
 
   if (req.method === 'POST' && url.pathname === '/api/auth/yandex/demo') {
     const phone = '+79001234567';
-    const phoneHash = hashPhone(phone);
-    const existingId = phoneHash ? userStore.findByPhoneHash(phoneHash)?.id : null;
-    const userId = existingId ?? 'demo-yandex-user';
+    const userId = hashPhone(phone)!;
 
     const session = await sessionStore.createSession({
       id: userId,
-      name: existingId ? userStore.getById(userId)!.name : 'Анна',
+      name: 'Анна',
       email: 'anna@example.com',
       firstName: 'Анна',
       lastName: 'Сергеева',
@@ -91,13 +89,7 @@ export async function handleAuthRoutes({
       provider: session.user.provider,
     });
 
-    if (phoneHash) userStore.linkPhoneHash(session.user.id, phoneHash);
-
-    sendJson(res, 200, {
-      user: session.user,
-      accessToken: session.accessToken,
-      linked: existingId != null,
-    });
+    sendJson(res, 200, { user: session.user, accessToken: session.accessToken });
     return true;
   }
 
@@ -182,29 +174,7 @@ async function handleYandexCallback({
 
   const name = profile.display_name || profile.real_name || 'Пользователь';
   const phone = profile.default_phone?.number;
-  const phoneHash = hashPhone(phone);
-  const existingId = phoneHash ? userStore.findByPhoneHash(phoneHash)?.id : null;
-  const userId = existingId ?? String(profile.id);
-
-  if (existingId) {
-    // Use existing user data
-    const existing = userStore.getById(existingId);
-    if (existing) {
-      const session = await sessionStore.createSession({
-        id: existingId,
-        name: existing.name,
-        email: existing.email,
-        avatarUrl: existing.avatarUrl || avatarUrl,
-        firstName: existing.firstName,
-        lastName: existing.lastName,
-        phone: existing.phone || phone,
-        provider: 'yandex',
-      });
-      if (phoneHash) userStore.linkPhoneHash(existingId, phoneHash);
-      redirect(res, `${config.frontendUrl}?auth=yandex&token=${session.accessToken}&linked=1`);
-      return;
-    }
-  }
+  const userId = phone ? hashPhone(phone)! : `yandex-${profile.id}`;
 
   const session = await sessionStore.createSession({
     id: userId,
@@ -213,7 +183,7 @@ async function handleYandexCallback({
     avatarUrl,
     firstName: profile.first_name,
     lastName: profile.last_name,
-    phone: profile.default_phone?.number,
+    phone: phone || undefined,
     provider: 'yandex',
   });
 
