@@ -15,6 +15,10 @@ type RouteContext = {
 };
 
 export async function handleChatRoutes({ req, res, url, store, sessionStore, broadcast }: RouteContext): Promise<boolean> {
+  // Only check auth for actual chat paths
+  const needsAuth = url.pathname.startsWith('/api/chats') || url.pathname.startsWith('/api/messages');
+  if (!needsAuth) return false;
+
   const token = getBearerToken(req);
   const session = token ? await sessionStore.findByToken(token) : null;
   if (!session) { sendJson(res, 401, { error: 'unauthorized' }); return true; }
