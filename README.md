@@ -57,7 +57,8 @@ export PHONE_HASH_SALT=...                                  # секретный
 - [x] Socket.IO realtime — комнаты, авто-реконнект, Redis adapter (N инстансов)
 - [x] Push-уведомления (web-push + service worker)
 - [x] Офлайн-режим: кеш, очередь сообщений, авто-синк
-- [x] PostgreSQL + Redis (сессии, 7d TTL)
+- [x] PostgreSQL + Redis (сессии, кеш, события, realtime)
+- [x] Prometheus-метрики (HTTP, CPU, сообщения) на `/metrics`
 - [x] CI/CD (GitHub Actions) + unit-тесты
 - [x] Тёмная тема, Telegram-стиль UI
 
@@ -70,10 +71,10 @@ export PHONE_HASH_SALT=...                                  # секретный
 | Сессии | ✅ Redis (7d) |
 | События | ✅ Redis Pub/Sub |
 | Кеш | ✅ Redis |
+| Мониторинг | ✅ Prometheus |
 | Файлы | ❌ S3/MinIO |
-| Мониторинг | ❌ Prometheus |
 
-**Готовность**: 90%. Можно поднимать N инстансов.
+**Готовность**: 95%. N инстансов, метрики, события.
 
 ## Архитектура
 
@@ -82,14 +83,14 @@ Flutter ──► Node.js × N (REST + Socket.IO)
                 │
     ┌───────────┼───────────┐
     ▼           ▼           ▼
-PostgreSQL    Redis       S3/MinIO
-              ├─ сессии
-              ├─ realtime (Socket.IO adapter)
+PostgreSQL    Redis       S3/MinIO    Prometheus
+              ├─ сессии                (метрики)
+              ├─ realtime
               ├─ кеш
-              └─ события (Pub/Sub → push, AI, search)
+              └─ события → push
 ```
 
-Поток сообщения: REST POST → PostgreSQL → Socket.IO broadcast + Redis Pub/Sub → push-уведомления (асинхронно, не блокирует ответ).
+API: `:3000` | WS: `:3000/ws` | Метрики: `:3000/metrics`
 
 ## База данных
 
@@ -110,7 +111,7 @@ apps/
 │       ├── config/      # env (Yandex, VAPID, DB, SALT)
 │       ├── data/        # PostgreSQL + Redis + in-memory fallback
 │       ├── domain/      # типы + crypto (sha256 хеширование)
-│       ├── http/        # JSON/CORS helpers
+│       ├── http/        # JSON/CORS + Prometheus metrics
 │       ├── routes/      # auth, chat, push, user
 │       └── ws/          # Socket.IO + event bus (Redis Pub/Sub) + push
 └── flutter_app/    # Flutter-клиент (web + mobile)
