@@ -4,6 +4,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AppConfig } from '../config/env.ts';
 import type { SessionStore } from '../data/inMemorySessionStore.ts';
 import type { UserStore } from '../data/userStore.ts';
+import { hashPhone } from '../domain/crypto.ts';
 import { sendJson } from '../http/json.ts';
 
 type RouteContext = {
@@ -64,13 +65,18 @@ export async function handleAuthRoutes({
   }
 
   if (req.method === 'POST' && url.pathname === '/api/auth/yandex/demo') {
+    const phone = '+79001234567';
+    const phoneHash = hashPhone(phone);
+    const existingId = phoneHash ? userStore.findByPhoneHash(phoneHash)?.id : null;
+    const userId = existingId ?? 'demo-yandex-user';
+
     const session = sessionStore.createSession({
-      id: 'demo-yandex-user',
-      name: 'Анна',
+      id: userId,
+      name: existingId ? userStore.getById(userId)!.name : 'Анна',
       email: 'anna@example.com',
       firstName: 'Анна',
       lastName: 'Сергеева',
-      phone: '+79001234567',
+      phone,
       provider: 'yandex-demo',
     });
 
@@ -85,9 +91,12 @@ export async function handleAuthRoutes({
       provider: session.user.provider,
     });
 
+    if (phoneHash) userStore.linkPhoneHash(session.user.id, phoneHash);
+
     sendJson(res, 200, {
       user: session.user,
       accessToken: session.accessToken,
+      linked: existingId != null,
     });
     return true;
   }
@@ -172,9 +181,33 @@ async function handleYandexCallback({
     : undefined;
 
   const name = profile.display_name || profile.real_name || 'Пользователь';
+  const phone = profile.default_phone?.number;
+  const phoneHash = hashPhone(phone);
+  const existingId = phoneHash ? userStore.findByPhoneHash(phoneHash)?.id : null;
+  const userId = existingId ?? String(profile.id);
+
+  if (existingId) {
+    // Use existing user data
+    const existing = userStore.getById(existingId);
+    if (existing) {
+      const session = sessionStore.createSession({
+        id: existingId,
+        name: existing.name,
+        email: existing.email,
+        avatarUrl: existing.avatarUrl || avatarUrl,
+        firstName: existing.firstName,
+        lastName: existing.lastName,
+        phone: existing.phone || phone,
+        provider: 'yandex',
+      });
+      if (phoneHash) userStore.linkPhoneHash(existingId, phoneHash);
+      redirect(res, `${config.frontendUrl}?auth=yandex&token=${session.accessToken}&linked=1`);
+      return;
+    }
+  }
 
   const session = sessionStore.createSession({
-    id: String(profile.id),
+    id: userId,
     name,
     email: profile.default_email,
     avatarUrl,

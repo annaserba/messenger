@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { SessionStore } from '../data/inMemorySessionStore.ts';
 import type { UserStore } from '../data/userStore.ts';
 import type { ChatStore } from '../data/pgStore.ts';
+import { hashPhone } from '../domain/crypto.ts';
 import { sendJson } from '../http/json.ts';
 
 type RouteContext = {
@@ -20,10 +21,25 @@ export async function handleUserRoutes({ req, res, url, sessionStore, userStore,
 
   const myUserId = session.user.id;
 
-  // Search users
+  // Search users by name or phone
   if (req.method === 'GET' && url.pathname === '/api/users/search') {
     const q = url.searchParams.get('q') ?? '';
     if (q.length < 2) { sendJson(res, 200, { users: [] }); return true; }
+
+    // Try exact phone match first
+    const phoneHash = hashPhone(q);
+    if (phoneHash) {
+      const byPhone = userStore.findByPhoneHash(phoneHash);
+      if (byPhone && byPhone.id !== myUserId) {
+        sendJson(res, 200, { users: [{
+          id: byPhone.id, name: byPhone.name, firstName: byPhone.firstName,
+          lastName: byPhone.lastName, avatarUrl: byPhone.avatarUrl,
+        }] });
+        return true;
+      }
+    }
+
+    // Fall back to name search
     const results = userStore.search(q).filter((u) => u.id !== myUserId);
     sendJson(res, 200, { users: results.map((u) => ({
       id: u.id, name: u.name, firstName: u.firstName, lastName: u.lastName, avatarUrl: u.avatarUrl,
