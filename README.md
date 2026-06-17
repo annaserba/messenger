@@ -36,16 +36,16 @@ export YANDEX_REDIRECT_URI=http://127.0.0.1:3000/api/auth/yandex/callback
 export FRONTEND_URL=http://127.0.0.1:8080
 ```
 
-Профиль заполняется из Яндекс-аккаунта: имя, фамилия, email, аватар. Сессия сохраняется
-в localStorage (web) / файл (native) и восстанавливается при перезагрузке.
+Профиль из Яндекс-аккаунта: имя, фамилия, email, аватар. Сессии в Redis (7 дней).
 
-## Зеркало Flutter
-
-Если Google Cloud Storage недоступен:
+## Production
 
 ```bash
-export FLUTTER_STORAGE_BASE_URL="https://storage.flutter-io.cn"
-flutter precache
+export DATABASE_URL=postgresql://localhost:5432/messenger  # PostgreSQL
+export REDIS_URL=redis://localhost:6379                     # Redis (опционально)
+export YANDEX_CLIENT_ID=...
+export YANDEX_CLIENT_SECRET=...
+export PHONE_HASH_SALT=...                                  # секретный ключ для хеша телефона
 ```
 
 ## Реализовано
@@ -74,14 +74,25 @@ flutter precache
 
 **Готовность**: 80%. Можно поднимать N инстансов.
 
+## База данных
+
+```sql
+users(phone_hash TEXT PK)  -- sha256(phone + SALT), не сам телефон
+chats, chat_participants, messages, reactions
+```
+
+Все связи по `phone_hash`. Телефон в БД не хранится — только необратимый хеш. При логине
+через Яндекс/VK телефон из OAuth хешируется → это ID пользователя. 152-ФЗ соблюдён.
+
 ## Структура
 
 ```
 apps/
-├── api_server/     # TypeScript backend (Node 25, Socket.IO, PostgreSQL)
+├── api_server/     # Node 25, TypeScript, PostgreSQL, Redis, Socket.IO
 │   └── src/
+│       ├── config/      # env (Yandex, VAPID, DB, SALT)
 │       ├── data/        # PostgreSQL + Redis + in-memory fallback
-│       ├── domain/      # типы + крипто (хеширование)
+│       ├── domain/      # типы + crypto (sha256 хеширование)
 │       ├── http/        # JSON/CORS helpers
 │       ├── routes/      # auth, chat, push, user
 │       └── ws/          # Socket.IO + push-уведомления
