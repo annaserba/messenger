@@ -17,7 +17,7 @@ export type ChatStore = {
   findChat(chatId: string): Chat | undefined;
   findChatByMessage(messageId: string): Chat | undefined;
   findMessage(messageId: string): { chat: Chat; message: Message } | undefined;
-  addMessage(chatId: string, author: string, text: string, replyToId?: string): Message | null;
+  addMessage(chatId: string, author: string, text: string, replyToId?: string, idempotencyKey?: string): Message | null;
   editMessage(messageId: string, text: string): Message | null;
   deleteMessage(messageId: string): boolean;
   setReaction(messageId: string, userId: string, userName: string, reaction: string): Message | null;
@@ -28,6 +28,7 @@ export type ChatStore = {
 
 export function createInMemoryStore(): ChatStore {
   const chats = new Map<string, Chat>();
+  const idempotencyKeys = new Set<string>();
 
   function makeChat(
     id: string,
@@ -97,9 +98,17 @@ export function createInMemoryStore(): ChatStore {
       return undefined;
     },
 
-    addMessage(chatId: string, author: string, text: string, replyToId?: string) {
+    addMessage(chatId: string, author: string, text: string, replyToId?: string, idempotencyKey?: string) {
       const chat = chats.get(chatId);
       if (!chat) return null;
+
+      // Idempotency check
+      if (idempotencyKey) {
+        if (idempotencyKeys.has(idempotencyKey)) {
+          return chat.messages.find((m) => (m as any).idempotencyKey === idempotencyKey) ?? null;
+        }
+      }
+
       let replyTo: ReplyInfo | undefined;
       if (replyToId) {
         const found = this.findMessage(replyToId);
@@ -108,6 +117,10 @@ export function createInMemoryStore(): ChatStore {
         }
       }
       const message = createMessage(author, text, Date.now(), replyTo);
+      if (idempotencyKey) {
+        idempotencyKeys.add(idempotencyKey);
+        (message as any).idempotencyKey = idempotencyKey;
+      }
       chat.messages.push(message);
       return message;
     },

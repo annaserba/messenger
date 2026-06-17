@@ -52,11 +52,16 @@ class ApiClient {
     required String chatId,
     required String text,
     String? replyTo,
+    String? idempotencyKey,
   }) {
     return _request(
       'POST',
       '/api/chats/$chatId/messages',
-      body: {'text': text, if (replyTo != null) 'replyTo': replyTo},
+      body: {
+        'text': text,
+        if (replyTo != null) 'replyTo': replyTo,
+        if (idempotencyKey != null) 'idempotencyKey': idempotencyKey,
+      },
     );
   }
 

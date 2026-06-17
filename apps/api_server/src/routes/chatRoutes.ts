@@ -70,9 +70,10 @@ export async function handleChatRoutes({ req, res, url, store, sessionStore, bro
       const body = await readJson(req);
       const text = String(body.text ?? '').trim();
       const replyTo = String(body.replyTo ?? '').trim() || undefined;
+      const idempotencyKey = String(body.idempotencyKey ?? '').trim() || undefined;
       if (!text) { sendJson(res, 400, { error: 'text_required' }); return true; }
 
-      const created = await store.addMessage(chatId, userId, userName, text, replyTo);
+      const created = await store.addMessage(chatId, userId, userName, text, replyTo, idempotencyKey);
       if (created) {
         messagesSent.inc();
         broadcast(chatId, { type: 'message', chatId, message: created });

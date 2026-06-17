@@ -220,6 +220,7 @@ class _MessengerHomeState extends State<MessengerHome> {
   }
 
   void _initOffline() {
+    _loadPersistedQueue();
     _updateOnlineStatus();
     try {
       _onlineSub = Stream.periodic(const Duration(seconds: 5)).listen((_) {
@@ -261,17 +262,22 @@ class _MessengerHomeState extends State<MessengerHome> {
     if (_offlineQueue.isEmpty) return;
     final queue = List<Map<String, dynamic>>.from(_offlineQueue);
     _offlineQueue.clear();
+    _persistQueue();
+
     for (final msg in queue) {
       try {
         await _api.sendMessage(
           chatId: msg['chatId'] as String,
           text: msg['text'] as String,
+          idempotencyKey: msg['key'] as String?,
         );
       } catch (_) {
         _offlineQueue.add(msg);
+        _persistQueue();
+        break; // Stop on first failure, retry later
       }
     }
-    if (mounted && queue.isNotEmpty) await _loadChats();
+    if (mounted && _offlineQueue.isEmpty && queue.isNotEmpty) await _loadChats();
   }
 
   void _selectChat(int index) {
@@ -290,6 +296,7 @@ class _MessengerHomeState extends State<MessengerHome> {
     final replyTo = _replyTo;
     if (chat == null || text.isEmpty) return;
 
+    final key = '${DateTime.now().millisecondsSinceEpoch}-${chat.id}';
     _messageController.clear();
     setState(() {
       _isTyping = false;
@@ -297,10 +304,9 @@ class _MessengerHomeState extends State<MessengerHome> {
     });
 
     if (!_isOnline) {
-      _offlineQueue.add({'chatId': chat.id, 'text': text});
-      // Show optimistic message
+      _addToOfflineQueue(chat.id, text, key);
       final optimistic = Message(
-        id: 'local-${DateTime.now().millisecondsSinceEpoch}',
+        id: key,
         author: _userName,
         text: text,
         sentAt: DateTime.now(),
@@ -315,14 +321,32 @@ class _MessengerHomeState extends State<MessengerHome> {
     }
 
     try {
-      await _api.sendMessage(chatId: chat.id, text: text, replyTo: replyTo?.id);
+      await _api.sendMessage(chatId: chat.id, text: text, replyTo: replyTo?.id, idempotencyKey: key);
       await _loadChats();
     } catch (_) {
-      _offlineQueue.add({'chatId': chat.id, 'text': text});
+      _addToOfflineQueue(chat.id, text, key);
       if (!mounted) return;
-      setState(() => _error = 'Сообщение не отправлено. Будет отправлено при подключении.');
+      setState(() => _error = 'Сообщение в очереди. Отправится при подключении.');
     }
     _messageFocus.requestFocus();
+  }
+
+  void _addToOfflineQueue(String chatId, String text, String key) {
+    _offlineQueue.add({'chatId': chatId, 'text': text, 'key': key});
+    _persistQueue();
+  }
+
+  void _persistQueue() {
+    cacheData('offline_queue', _offlineQueue);
+  }
+
+  void _loadPersistedQueue() {
+    final raw = loadCached('offline_queue');
+    if (raw == null) return;
+    try {
+      final list = jsonDecode(raw) as List<dynamic>;
+      _offlineQueue.addAll(list.cast<Map<String, dynamic>>());
+    } catch (_) {}
   }
 
   void _toggleTyping(String value) {
