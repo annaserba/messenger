@@ -32,7 +32,7 @@ class Message {
       author: author,
       text: json['text'] as String? ?? '',
       sentAt:
-          DateTime.tryParse(json['sentAt'] as String? ?? '') ?? DateTime.now(),
+          DateTime.tryParse(json['sentAt'] as String? ?? '')?.toLocal() ?? DateTime.now(),
       isMine: author == currentUser,
       reactions: _parseReactions(json['reactions'] as List<dynamic>?, currentUser),
       replyTo: json['replyTo'] != null
