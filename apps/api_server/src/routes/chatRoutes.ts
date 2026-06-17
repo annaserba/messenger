@@ -3,6 +3,7 @@ import type { SessionStore } from '../data/inMemorySessionStore.ts';
 import type { ChatStore } from '../data/pgStore.ts';
 import type { ChatType } from '../domain/message.ts';
 import { publishEvent } from '../ws/eventBus.ts';
+import { messagesSent } from '../http/metrics.ts';
 import { readJson, sendJson } from '../http/json.ts';
 
 type RouteContext = {
@@ -73,6 +74,7 @@ export async function handleChatRoutes({ req, res, url, store, sessionStore, bro
 
       const created = await store.addMessage(chatId, userId, userName, text, replyTo);
       if (created) {
+        messagesSent.inc();
         broadcast(chatId, { type: 'message', chatId, message: created });
         const chats = await store.listChats(userId);
         const full = chats.find((c) => c.id === chatId);

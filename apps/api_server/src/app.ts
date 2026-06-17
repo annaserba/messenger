@@ -5,6 +5,7 @@ import { handleChatRoutes } from './routes/chatRoutes.ts';
 import { handlePushRoutes } from './routes/pushRoutes.ts';
 import { handleUserRoutes } from './routes/userRoutes.ts';
 import { sendJson } from './http/json.ts';
+import { metricsHandler } from './http/metrics.ts';
 import type { AppConfig } from './config/env.ts';
 import type { ChatStore } from './data/pgStore.ts';
 import type { SessionStore } from './data/inMemorySessionStore.ts';
@@ -28,6 +29,12 @@ export function createApp({ config, store, sessionStore, pushStore, userStore }:
 
       if (req.method === 'OPTIONS') { sendJson(res, 204, {}); return; }
       if (req.method === 'GET' && url.pathname === '/health') { sendJson(res, 200, { ok: true }); return; }
+      if (req.method === 'GET' && url.pathname === '/metrics') {
+        const body = await metricsHandler();
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end(body);
+        return;
+      }
 
       const broadcast = _broadcast ?? (() => {});
       if (await handleAuthRoutes({ req, res, url, config, sessionStore, userStore })) return;
