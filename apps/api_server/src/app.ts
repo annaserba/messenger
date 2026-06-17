@@ -31,7 +31,7 @@ export function createApp({ config, store, sessionStore, pushStore, userStore }:
 
       const broadcast = _broadcast ?? (() => {});
       if (await handleAuthRoutes({ req, res, url, config, sessionStore, userStore })) return;
-      if (await handleChatRoutes({ req, res, url, store, sessionStore, broadcast, pushStore })) return;
+      if (await handleChatRoutes({ req, res, url, store, sessionStore, broadcast })) return;
       if (await handlePushRoutes({ req, res, url, sessionStore, pushStore })) return;
       if (await handleUserRoutes({ req, res, url, sessionStore, userStore, store })) return;
 

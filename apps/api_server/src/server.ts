@@ -5,6 +5,7 @@ import { createInMemorySessionStore } from './data/inMemorySessionStore.ts';
 import { createRedisSessionStore } from './data/redisSessionStore.ts';
 import { createWsServer } from './ws/wsServer.ts';
 import { createPushStore } from './ws/pushStore.ts';
+import { subscribeToEvents } from './ws/eventBus.ts';
 import { createInMemoryUserStore } from './data/userStore.ts';
 
 const userStore = createInMemoryUserStore();
@@ -14,7 +15,6 @@ async function main() {
   let store;
   let sessionStore;
 
-  // Data store
   if (process.env.DATABASE_URL) {
     const { createPgStore } = await import('./data/pgStore.ts');
     const pgStore = createPgStore();
@@ -26,7 +26,6 @@ async function main() {
     console.log('Store: in-memory');
   }
 
-  // Session store
   try {
     const redisStore = createRedisSessionStore();
     await redisStore.createSession({ id: 'test', name: 'test', provider: 'yandex-demo' as const });
@@ -34,8 +33,22 @@ async function main() {
     console.log('Sessions: Redis');
   } catch {
     sessionStore = createInMemorySessionStore();
-    console.log('Sessions: in-memory (Redis unavailable)');
+    console.log('Sessions: in-memory');
   }
+
+  // Push notification subscriber (async, non-blocking)
+  subscribeToEvents('chat:messages', async (event) => {
+    if (event.type === 'message_created') {
+      for (const userId of event.recipientUserIds) {
+        pushStore.send(userId, {
+          title: event.chatTitle,
+          body: event.text,
+          icon: '/favicon.png',
+          data: { chatId: event.chatId },
+        });
+      }
+    }
+  });
 
   const app = createApp({ config, store: store as Parameters<typeof createApp>[0]['store'], sessionStore, pushStore, userStore });
   const ws = createWsServer(app.server, sessionStore);

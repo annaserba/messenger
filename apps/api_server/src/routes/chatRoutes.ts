@@ -1,8 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { SessionStore } from '../data/inMemorySessionStore.ts';
 import type { ChatStore } from '../data/pgStore.ts';
-import type { PushStore } from '../ws/pushStore.ts';
 import type { ChatType } from '../domain/message.ts';
+import { publishEvent } from '../ws/eventBus.ts';
 import { readJson, sendJson } from '../http/json.ts';
 
 type RouteContext = {
@@ -12,10 +12,9 @@ type RouteContext = {
   store: ChatStore;
   sessionStore: SessionStore;
   broadcast: (chatId: string, event: Record<string, unknown>) => void;
-  pushStore: PushStore;
 };
 
-export async function handleChatRoutes({ req, res, url, store, sessionStore, broadcast, pushStore }: RouteContext): Promise<boolean> {
+export async function handleChatRoutes({ req, res, url, store, sessionStore, broadcast }: RouteContext): Promise<boolean> {
   const token = getBearerToken(req);
   const session = token ? await sessionStore.findByToken(token) : null;
   if (!session) { sendJson(res, 401, { error: 'unauthorized' }); return true; }
@@ -74,14 +73,19 @@ export async function handleChatRoutes({ req, res, url, store, sessionStore, bro
         const chats = await store.listChats(userId);
         const full = chats.find((c) => c.id === chatId);
         if (full) {
-          for (const p of full.participants) {
-            if (p.userId !== userId) {
-              pushStore.send(p.userId, {
-                title: chat.type === 'personal' ? userName : chat.title,
-                body: text, icon: '/favicon.png', data: { chatId },
-              });
-            }
-          }
+          const recipients = full.participants
+            .filter((p) => p.userId !== userId)
+            .map((p) => p.userId);
+          publishEvent('chat:messages', {
+            type: 'message_created',
+            chatId,
+            messageId: created.id as string,
+            authorName: userName,
+            text,
+            chatTitle: chat.type === 'personal' ? userName : chat.title,
+            chatType: chat.type,
+            recipientUserIds: recipients,
+          });
         }
       }
       sendJson(res, 201, { message: created });
