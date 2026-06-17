@@ -715,7 +715,7 @@ class _SidebarState extends State<_Sidebar> {
               focusNode: _searchFocus,
               onChanged: _onSearchChanged,
               decoration: InputDecoration(
-                hintText: 'Поиск по имени',
+                hintText: 'Поиск по имени или телефону',
                 prefixIcon: const Icon(Icons.search_rounded, size: 20),
                 suffixIcon: _searchController.text.isNotEmpty
                     ? IconButton(
